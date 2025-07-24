@@ -1,0 +1,29 @@
+{
+  "project_info": {
+    "project_number": "982643274182",
+    "project_id": "vastramitra-b1cd0",
+    "storage_bucket": "vastramitra-b1cd0.firebasestorage.app"
+  },
+  "client": [
+    {
+      "client_info": {
+        "mobilesdk_app_id": "1:982643274182:android:f38c29794e656f15cd82c7",
+        "android_client_info": {
+          "package_name": "com.vastramitra"
+        }
+      },
+      "oauth_client": [],
+      "api_key": [
+        {
+          "current_key": "AIzaSyCJvI8iOqG5y03LjiWoOJmjwlRdw0WHJJ0"
+        }
+      ],
+      "services": {
+        "appinvite_service": {
+          "other_platform_oauth_client": []
+        }
+      }
+    }
+  ],
+  "configuration_version": "1"
+}
