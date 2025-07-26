@@ -12,7 +12,20 @@
           "package_name": "com.vastramitra"
         }
       },
-      "oauth_client": [],
+      "oauth_client": [
+        {
+          "client_id": "982643274182-2puitccul5dud1fqjsf34ak8oibpgba9.apps.googleusercontent.com",
+          "client_type": 1,
+          "android_info": {
+            "package_name": "com.vastramitra",
+            "certificate_hash": "9a4f4f65518c094cede8d254633eb7d2430aa42c"
+          }
+        },
+        {
+          "client_id": "982643274182-80ee4jmmhsi0v0ov9o31nvsn19n4fvh2.apps.googleusercontent.com",
+          "client_type": 3
+        }
+      ],
       "api_key": [
         {
           "current_key": "AIzaSyCJvI8iOqG5y03LjiWoOJmjwlRdw0WHJJ0"
@@ -20,7 +33,12 @@
       ],
       "services": {
         "appinvite_service": {
-          "other_platform_oauth_client": []
+          "other_platform_oauth_client": [
+            {
+              "client_id": "982643274182-80ee4jmmhsi0v0ov9o31nvsn19n4fvh2.apps.googleusercontent.com",
+              "client_type": 3
+            }
+          ]
         }
       }
     }

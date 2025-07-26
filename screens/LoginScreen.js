@@ -25,32 +25,37 @@ const LoginScreen = ({ navigation }) => {
     }
 
     try {
-      // 1. Firebase Auth Sign-in
       const userCredential = await signInWithEmailAndPassword(auth, email, password);
       const user = userCredential.user;
 
-      // 2. Get user data from Firestore
-      const userDocRef = doc(db, 'users', user.uid);
-      const userSnap = await getDoc(userDocRef);
+      // Firestore user data
+      const userRef = doc(db, 'users', user.uid);
+      const userSnap = await getDoc(userRef);
 
       if (!userSnap.exists()) {
-        Alert.alert('Error', 'User data not found in Firestore');
+        Alert.alert('Login Error', 'User data not found in Firestore');
         return;
       }
 
       const userData = userSnap.data();
 
-      // 3. Store in AsyncStorage (login flag + optional role)
+      // Save session info
       await AsyncStorage.setItem('isLoggedIn', 'true');
       await AsyncStorage.setItem('userId', user.uid);
       await AsyncStorage.setItem('userName', userData.name || '');
       await AsyncStorage.setItem('userEmail', userData.emailOrPhone || '');
 
-      // 4. Navigate to home/dashboard
-      navigation.replace('Home');
+      // 👉 Tailor vs Customer redirect
+      if (email.toLowerCase() === 'tailor@vastra.com') {
+        await AsyncStorage.setItem('userRole', 'tailor');
+        navigation.replace('TailorScreen'); // Update to match your navigator
+      } else {
+        await AsyncStorage.setItem('userRole', 'customer');
+        navigation.replace('CustomerScreen');
+      }
 
     } catch (error) {
-      console.log('Login Error:', error.message);
+      console.error('Login Error:', error);
       Alert.alert('Login Failed', error.message);
     }
   };
@@ -61,7 +66,7 @@ const LoginScreen = ({ navigation }) => {
       <Text style={styles.subtitle}>Login to VastraMitra</Text>
 
       <TextInput
-        placeholder="Email or Phone"
+        placeholder="Email"
         placeholderTextColor="#999"
         style={styles.input}
         value={email}
@@ -97,7 +102,7 @@ const LoginScreen = ({ navigation }) => {
   );
 };
 
-// Styles (unchanged)
+// 💅 Styles
 const styles = StyleSheet.create({
   container: {
     flex: 1,

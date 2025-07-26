@@ -6,15 +6,18 @@ import AppNavigator from './navigation/AppNavigator';
 const App = () => {
   const [showOnboarding, setShowOnboarding] = useState(null);
   const [isLoggedIn, setIsLoggedIn] = useState(null);
+  const [userRole, setUserRole] = useState(null);
 
   useEffect(() => {
     const checkStorage = async () => {
       try {
         const onboarding = await AsyncStorage.getItem('hasSeenOnboarding');
         const loggedIn = await AsyncStorage.getItem('isLoggedIn');
+        const role = await AsyncStorage.getItem('userRole');
 
-        setShowOnboarding(onboarding === null);     // true if not seen
-        setIsLoggedIn(loggedIn === 'true');         // true if already logged in
+        setShowOnboarding(onboarding === null);        // true if first time
+        setIsLoggedIn(loggedIn === 'true');            // logged in status
+        setUserRole(role);                             // "tailor" or "customer"
       } catch (error) {
         console.log('Error loading storage', error);
       }
@@ -23,13 +26,17 @@ const App = () => {
     checkStorage();
   }, []);
 
-  if (showOnboarding === null || isLoggedIn === null) {
-    return null; // wait for async check to finish (no flicker)
+  if (showOnboarding === null || isLoggedIn === null || userRole === null) {
+    return null; // Wait for async to complete before rendering anything
   }
 
   return (
     <NavigationContainer>
-      <AppNavigator showOnboarding={showOnboarding} isLoggedIn={isLoggedIn} />
+      <AppNavigator
+        showOnboarding={showOnboarding}
+        isLoggedIn={isLoggedIn}
+        userRole={userRole}
+      />
     </NavigationContainer>
   );
 };
