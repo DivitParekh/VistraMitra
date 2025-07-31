@@ -7,7 +7,8 @@ import LoginScreen from '../screens/LoginScreen';
 import SignupScreen from '../screens/SignupScreen';
 import CustomerScreen from '../screens/CustomerScreen';
 import AppointmentScreen from '../screens/AppointmentScreen';
-
+import TailorScreen from '../screens/TailorScreen'
+import AppointmentCalendar from '../screens/AppointmentCalendar';
 
 const Stack = createNativeStackNavigator();
 
@@ -41,11 +42,10 @@ const AppNavigator = ({ showOnboarding }) => {
       <Stack.Screen name="Login" component={LoginScreen} />
       <Stack.Screen name="Signup" component={SignupScreen} />
       <Stack.Screen name="CustomerScreen" component={CustomerScreen} />
+      <Stack.Screen name="TailorScreen" component={TailorScreen} />
       <Stack.Screen name="AppointmentScreen" component={AppointmentScreen} />
-      
-      
+      <Stack.Screen name="AppointmentCalendar" component={AppointmentCalendar}/>
     </Stack.Navigator>
   );
 };
-
 export default AppNavigator;

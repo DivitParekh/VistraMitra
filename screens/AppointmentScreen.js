@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useEffect, useState } from 'react';
 import {
   View,
   Text,
@@ -6,52 +6,99 @@ import {
   TouchableOpacity,
   ScrollView,
   Platform,
+  Alert,
+  TextInput,
 } from 'react-native';
 import DateTimePicker from '@react-native-community/datetimepicker';
 import { Ionicons } from '@expo/vector-icons';
 import { Picker } from '@react-native-picker/picker';
+import { db } from '../firebase/firebaseConfig';
+import {
+  collection,
+  doc,
+  setDoc,
+  getDocs,
+  query,
+} from 'firebase/firestore';
+import AsyncStorage from '@react-native-async-storage/async-storage';
 
 const AppointmentScreen = () => {
   const [appointments, setAppointments] = useState([]);
-
   const [selectedDate, setSelectedDate] = useState(new Date());
   const [selectedTime, setSelectedTime] = useState(null);
   const [visitType, setVisitType] = useState('Home Visit');
-
   const [showDatePicker, setShowDatePicker] = useState(false);
   const [showTimePicker, setShowTimePicker] = useState(false);
+  const [userId, setUserId] = useState(null);
 
-  const formatDate = (date) => {
-    return date.toDateString(); // Example: "Mon Jul 29 2025"
-  };
+  const [name, setName] = useState('');
+  const [phone, setPhone] = useState('');
+  const [email, setEmail] = useState('');
+  const [address, setAddress] = useState('');
+  const [note, setNote] = useState('');
 
+  useEffect(() => {
+    const fetchAppointments = async () => {
+      const uid = await AsyncStorage.getItem('userId');
+      if (!uid) return;
+      setUserId(uid);
+      const q = query(collection(db, 'appointments', uid, 'userAppointments'));
+      const snapshot = await getDocs(q);
+      const data = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
+      setAppointments(data);
+    };
+    fetchAppointments();
+  }, []);
+
+  const formatDate = (date) => date.toDateString();
   const formatTime = (date) => {
-    const hours = date.getHours();
-    const minutes = date.getMinutes();
-    const ampm = hours >= 12 ? 'PM' : 'AM';
-    const formattedHour = hours % 12 || 12;
-    return `${formattedHour}:${minutes.toString().padStart(2, '0')} ${ampm}`;
+    const h = date.getHours();
+    const m = date.getMinutes();
+    const ampm = h >= 12 ? 'PM' : 'AM';
+    const hr = h % 12 || 12;
+    return `${hr}:${m.toString().padStart(2, '0')} ${ampm}`;
   };
 
-  const handleBookAppointment = () => {
-    if (!selectedTime) {
-      alert('Please select time');
-      return;
+  const handleBookAppointment = async () => {
+    if (!selectedTime || !name || !phone || !email || !address) {
+      return Alert.alert('Error', 'Please fill all fields and select time');
     }
+    if (!userId) return Alert.alert('User not logged in');
 
-    const newAppointment = {
-      id: Date.now().toString(),
+    const newApp = {
+      userId,
+      fullName: name,
+      phone,
+      email,
+      address,
+      note,
       date: formatDate(selectedDate),
       time: formatTime(selectedTime),
       type: visitType,
       status: 'Pending',
+      createdAt: new Date().toISOString(),
     };
 
-    setAppointments([...appointments, newAppointment]);
-    setSelectedTime(null);
-    setVisitType('Home Visit');
-    setSelectedDate(new Date());
-    alert('Appointment booked!');
+    try {
+      // 1. Save under userAppointments (Customer-specific)
+      const userAppointmentsRef = collection(db, 'appointments', userId, 'userAppointments');
+      const userAppDoc = doc(userAppointmentsRef); // auto-ID
+      await setDoc(userAppDoc, newApp);
+
+      // 2. Also save under tailorAppointments (Global for Tailor)
+      const tailorAppointmentsRef = doc(collection(db, 'tailorAppointments'), userAppDoc.id);
+      await setDoc(tailorAppointmentsRef, newApp);
+
+      setAppointments([...appointments, { ...newApp, id: userAppDoc.id }]);
+      setSelectedTime(null);
+      setVisitType('Home Visit');
+      setSelectedDate(new Date());
+      setName(''); setPhone(''); setEmail(''); setAddress(''); setNote('');
+      Alert.alert('Success', 'Appointment booked!');
+    } catch (err) {
+      console.error('Booking Error:', err);
+      Alert.alert('Error', 'Something went wrong while booking');
+    }
   };
 
   return (
@@ -61,7 +108,6 @@ const AppointmentScreen = () => {
         <Ionicons name="calendar-outline" size={24} color="#2c3e50" />
       </View>
 
-      {/* Appointments */}
       {appointments.length === 0 ? (
         <Text style={styles.noAppointment}>No appointments booked yet.</Text>
       ) : (
@@ -69,9 +115,22 @@ const AppointmentScreen = () => {
           <Text style={styles.subheading}>Your Appointments</Text>
           {appointments.map((item) => (
             <View key={item.id} style={styles.appointmentCard}>
-              <Text style={styles.appointmentText}>
-                {item.date} at {item.time} ({item.type})
-              </Text>
+              <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' }}>
+                <View style={{ flex: 1 }}>
+                  <Text style={styles.appointmentText}>
+                    {item.date} at {item.time} ({item.type})
+                  </Text>
+                  <Text style={{ color: '#555', fontSize: 13 }}>{item.fullName}</Text>
+                </View>
+                <View style={[
+                  styles.statusBadge,
+                  item.status === 'Confirmed' ? styles.statusConfirmed :
+                  item.status === 'Rejected' ? styles.statusRejected :
+                  styles.statusPending
+                ]}>
+                  <Text style={styles.statusText}>{item.status}</Text>
+                </View>
+              </View>
             </View>
           ))}
         </View>
@@ -79,7 +138,22 @@ const AppointmentScreen = () => {
 
       {/* Form */}
       <View style={styles.form}>
-        <Text style={styles.label}>Select Date</Text>
+        <Text style={styles.label}>Your Full Name</Text>
+        <TextInput style={styles.input} value={name} onChangeText={setName} placeholder="John Doe" />
+        <Text style={styles.label}>Phone Number</Text>
+        <TextInput style={styles.input} value={phone} onChangeText={setPhone} keyboardType="phone-pad" placeholder="+91 98765 43210" />
+        <Text style={styles.label}>Email Address</Text>
+        <TextInput style={styles.input} value={email} onChangeText={setEmail} keyboardType="email-address" placeholder="you@example.com" />
+        <Text style={styles.label}>Address</Text>
+        <TextInput style={styles.input} value={address} onChangeText={setAddress} placeholder="123, Street Name, City" />
+        <Text style={styles.label}>Service Type</Text>
+        <View style={styles.pickerContainer}>
+          <Picker selectedValue={visitType} onValueChange={(value) => setVisitType(value)} style={styles.picker}>
+            <Picker.Item label="Home Visit" value="Home Visit" />
+            <Picker.Item label="Studio Visit" value="Studio Visit" />
+          </Picker>
+        </View>
+        <Text style={styles.label}>Preferred Date</Text>
         <TouchableOpacity style={styles.input} onPress={() => setShowDatePicker(true)}>
           <Text>{formatDate(selectedDate)}</Text>
         </TouchableOpacity>
@@ -94,10 +168,9 @@ const AppointmentScreen = () => {
             display={Platform.OS === 'ios' ? 'inline' : 'default'}
           />
         )}
-
-        <Text style={styles.label}>Select Time</Text>
+        <Text style={styles.label}>Preferred Time</Text>
         <TouchableOpacity style={styles.input} onPress={() => setShowTimePicker(true)}>
-          <Text>{selectedTime ? formatTime(selectedTime) : 'Select Time'}</Text>
+          <Text>{selectedTime ? formatTime(selectedTime) : 'Tap to pick time'}</Text>
         </TouchableOpacity>
         {showTimePicker && (
           <DateTimePicker
@@ -110,20 +183,16 @@ const AppointmentScreen = () => {
             display={Platform.OS === 'ios' ? 'spinner' : 'default'}
           />
         )}
-
-        <Text style={styles.label}>Visit Type</Text>
-        <View style={styles.pickerContainer}>
-          <Picker
-            selectedValue={visitType}
-            onValueChange={(value) => setVisitType(value)}
-            style={styles.picker}>
-            <Picker.Item label="Home Visit" value="Home Visit" />
-            <Picker.Item label="Studio Visit" value="Studio Visit" />
-          </Picker>
-        </View>
-
+        <Text style={styles.label}>Special Note</Text>
+        <TextInput
+          style={[styles.input, { height: 80 }]}
+          multiline
+          value={note}
+          onChangeText={setNote}
+          placeholder="e.g. Looking for a slim-fit navy suit..."
+        />
         <TouchableOpacity style={styles.bookBtn} onPress={handleBookAppointment}>
-          <Text style={styles.bookBtnText}>Book Appointment</Text>
+          <Text style={styles.bookBtnText}>Submit Appointment Request</Text>
         </TouchableOpacity>
       </View>
     </ScrollView>
@@ -193,7 +262,7 @@ const styles = StyleSheet.create({
     borderRadius: 10,
     borderWidth: 1,
     borderColor: '#ddd',
-    marginBottom: 24,
+    marginBottom: 16,
     overflow: 'hidden',
   },
   picker: {
@@ -205,11 +274,31 @@ const styles = StyleSheet.create({
     paddingVertical: 14,
     borderRadius: 10,
     alignItems: 'center',
+    marginTop: 10,
   },
   bookBtnText: {
     color: '#fff',
     fontWeight: '600',
     fontSize: 16,
+  },
+  statusBadge: {
+    paddingHorizontal: 10,
+    paddingVertical: 4,
+    borderRadius: 12,
+  },
+  statusText: {
+    fontSize: 12,
+    fontWeight: '600',
+    color: '#fff',
+  },
+  statusPending: {
+    backgroundColor: '#f39c12',
+  },
+  statusConfirmed: {
+    backgroundColor: '#27ae60',
+  },
+  statusRejected: {
+    backgroundColor: '#e74c3c',
   },
 });
 
