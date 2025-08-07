@@ -22,6 +22,7 @@ import {
 } from 'firebase/firestore';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 
+
 const AppointmentScreen = () => {
   const [appointments, setAppointments] = useState([]);
   const [selectedDate, setSelectedDate] = useState(new Date());
@@ -50,7 +51,7 @@ const AppointmentScreen = () => {
     fetchAppointments();
   }, []);
 
-  const formatDate = (date) => date.toDateString();
+  const formatDate = (date) => date.toISOString().split('T')[0]; 
   const formatTime = (date) => {
     const h = date.getHours();
     const m = date.getMinutes();
@@ -59,25 +60,25 @@ const AppointmentScreen = () => {
     return `${hr}:${m.toString().padStart(2, '0')} ${ampm}`;
   };
 
-  const handleBookAppointment = async () => {
-    if (!selectedTime || !name || !phone || !email || !address) {
-      return Alert.alert('Error', 'Please fill all fields and select time');
-    }
-    if (!userId) return Alert.alert('User not logged in');
+    const handleBookAppointment = async () => {
+      if (!selectedTime || !name || !phone || !email || !address) {
+        return Alert.alert('Error', 'Please fill all fields and select time');
+      }
+      if (!userId) return Alert.alert('User not logged in');
 
-    const newApp = {
-      userId,
-      fullName: name,
-      phone,
-      email,
-      address,
-      note,
-      date: formatDate(selectedDate),
-      time: formatTime(selectedTime),
-      type: visitType,
-      status: 'Pending',
-      createdAt: new Date().toISOString(),
-    };
+      const newApp = {
+        userId,
+        fullName: name,
+        phone,
+        email,
+        address,
+        note,
+        date: formatDate(selectedDate),
+        time: formatTime(selectedTime),
+        type: visitType,
+        status: 'Pending',
+        createdAt: new Date().toISOString(),
+      };
 
     try {
       // 1. Save under userAppointments (Customer-specific)

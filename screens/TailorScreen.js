@@ -10,7 +10,6 @@ import {
 import {
   Ionicons,
   FontAwesome5,
-  MaterialCommunityIcons,
 } from '@expo/vector-icons';
 
 const TailorScreen = ({ navigation }) => {
@@ -63,6 +62,22 @@ const TailorScreen = ({ navigation }) => {
           </TouchableOpacity>
         </View>
 
+        <View style={styles.row}>
+          <TouchableOpacity
+            style={styles.card}
+            onPress={() => navigation.navigate('TailorChatScreen', {
+              customerId: 'customer_tMBuwwHBcuetfJKL7VJa1P0GegB2'
+            })}
+          >
+            <Ionicons name="chatbubbles-outline" size={26} color="#4e4e4e" />
+            <Text style={styles.cardText}>Chat with Customer</Text>
+          </TouchableOpacity>
+
+          <View style={[styles.card, { backgroundColor: '#f5f5f5' }]}>
+            <Text style={styles.cardText}>Coming Soon</Text>
+          </View>
+        </View>
+
         <View style={{ height: 80 }} />
       </ScrollView>
 
@@ -78,7 +93,9 @@ const TailorScreen = ({ navigation }) => {
           <Text style={styles.navText}>Tasks</Text>
         </TouchableOpacity>
 
-        <TouchableOpacity onPress={() => navigation.navigate('TailorChat')}>
+        <TouchableOpacity onPress={() => navigation.navigate('TailorChatScreen', {
+          customerId: 'customer_tMBuwwHBcuetfJKL7VJa1P0GegB2'
+        })}>
           <Ionicons name="chatbubble-ellipses-outline" size={24} color="#333" />
           <Text style={styles.navText}>Chats</Text>
         </TouchableOpacity>

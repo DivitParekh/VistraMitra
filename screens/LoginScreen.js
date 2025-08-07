@@ -41,7 +41,7 @@ const LoginScreen = ({ navigation }) => {
 
       // Save session info
       await AsyncStorage.setItem('isLoggedIn', 'true');
-      await AsyncStorage.setItem('userId', user.uid);
+      await AsyncStorage.setItem('uid', user.uid);               // <-- Updated here
       await AsyncStorage.setItem('userName', userData.name || '');
       await AsyncStorage.setItem('userEmail', userData.emailOrPhone || '');
 
@@ -102,7 +102,6 @@ const LoginScreen = ({ navigation }) => {
   );
 };
 
-// 💅 Styles
 const styles = StyleSheet.create({
   container: {
     flex: 1,

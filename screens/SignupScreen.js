@@ -48,7 +48,7 @@ const SignupScreen = ({ navigation }) => {
 
       // 3. Save login status
       await AsyncStorage.setItem('isLoggedIn', 'true');
-      await AsyncStorage.setItem('userId', user.uid);
+      await AsyncStorage.setItem('uid', user.uid);             {/* <-- Updated here */}
 
       // 4. Navigate to home screen
       navigation.replace('Home');

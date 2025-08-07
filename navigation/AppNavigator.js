@@ -9,6 +9,8 @@ import CustomerScreen from '../screens/CustomerScreen';
 import AppointmentScreen from '../screens/AppointmentScreen';
 import TailorScreen from '../screens/TailorScreen'
 import AppointmentCalendar from '../screens/AppointmentCalendar';
+import ChatScreen from '../screens/ChatScreen';
+import TailorChatScreen from '../screens/TailorChatScreen';
 
 const Stack = createNativeStackNavigator();
 
@@ -45,6 +47,8 @@ const AppNavigator = ({ showOnboarding }) => {
       <Stack.Screen name="TailorScreen" component={TailorScreen} />
       <Stack.Screen name="AppointmentScreen" component={AppointmentScreen} />
       <Stack.Screen name="AppointmentCalendar" component={AppointmentCalendar}/>
+      <Stack.Screen name="ChatScreen" component={ChatScreen}/>
+      <Stack.Screen name= "TailorChatScreen" component={TailorChatScreen}/>
     </Stack.Navigator>
   );
 };

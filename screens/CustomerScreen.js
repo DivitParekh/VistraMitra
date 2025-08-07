@@ -54,12 +54,13 @@ const CustomerScreen = ({ navigation }) => {
           </TouchableOpacity>
 
           <TouchableOpacity
-            style={styles.card}
-            onPress={() => navigation.navigate('TailorChat')}
-          >
-            <Ionicons name="chatbubble-ellipses-outline" size={28} color="#4e4e4e" />
-            <Text style={styles.cardText}>Tailor Chat</Text>
-          </TouchableOpacity>
+              style={styles.card}
+              onPress={() => navigation.navigate('ChatScreen')}
+            >
+              <Ionicons name="chatbubble-ellipses-outline" size={26} color="#4e4e4e" />
+              <Text style={styles.cardText}>Tailor Chat</Text>
+            </TouchableOpacity>
+
         </View>
 
         {/* Full-width Saved Styles */}
