@@ -1,16 +1,19 @@
 import React, { useEffect, useState } from 'react';
 import { createNativeStackNavigator } from '@react-navigation/native-stack';
 import AsyncStorage from '@react-native-async-storage/async-storage';
-
 import OnboardingScreen from '../screens/OnboardingScreen';
 import LoginScreen from '../screens/LoginScreen';
 import SignupScreen from '../screens/SignupScreen';
 import CustomerScreen from '../screens/CustomerScreen';
+import TailorScreen from '../screens/TailorScreen';
 import AppointmentScreen from '../screens/AppointmentScreen';
-import TailorScreen from '../screens/TailorScreen'
 import AppointmentCalendar from '../screens/AppointmentCalendar';
 import ChatScreen from '../screens/ChatScreen';
 import TailorChatScreen from '../screens/TailorChatScreen';
+import TailorTaskManager from '../screens/TailorTaskManager';
+import CatalogScreen from '../screens/CatalogScreen';
+import CategoryStylesScreen from '../screens/CategoryStylesScreen';
+import SavedStylesScreen from '../screens/SavedStylesScreen';
 
 const Stack = createNativeStackNavigator();
 
@@ -46,10 +49,15 @@ const AppNavigator = ({ showOnboarding }) => {
       <Stack.Screen name="CustomerScreen" component={CustomerScreen} />
       <Stack.Screen name="TailorScreen" component={TailorScreen} />
       <Stack.Screen name="AppointmentScreen" component={AppointmentScreen} />
-      <Stack.Screen name="AppointmentCalendar" component={AppointmentCalendar}/>
-      <Stack.Screen name="ChatScreen" component={ChatScreen}/>
-      <Stack.Screen name= "TailorChatScreen" component={TailorChatScreen}/>
+      <Stack.Screen name="AppointmentCalendar" component={AppointmentCalendar} />
+      <Stack.Screen name="ChatScreen" component={ChatScreen} />
+      <Stack.Screen name="TailorChatScreen" component={TailorChatScreen} />
+      <Stack.Screen name="TailorTaskManager" component={TailorTaskManager} />
+      <Stack.Screen name="CatalogScreen" component={CatalogScreen} />
+      <Stack.Screen name="CategoryStylesScreen" component={CategoryStylesScreen} />
+      <Stack.Screen name="SavedStyles" component={SavedStylesScreen} />
     </Stack.Navigator>
   );
 };
+
 export default AppNavigator;

@@ -7,10 +7,7 @@ import {
   ScrollView,
   TouchableOpacity,
 } from 'react-native';
-import {
-  Ionicons,
-  FontAwesome5,
-} from '@expo/vector-icons';
+import { Ionicons, FontAwesome5 } from '@expo/vector-icons';
 
 const TailorScreen = ({ navigation }) => {
   return (
@@ -21,7 +18,8 @@ const TailorScreen = ({ navigation }) => {
         <Text style={styles.subheader}>Your Dashboard</Text>
         <TouchableOpacity
           style={styles.notificationIcon}
-          onPress={() => navigation.navigate('Notifications')}>
+          onPress={() => navigation.navigate('Notifications')}
+        >
           <Ionicons name="notifications-outline" size={22} color="#2c3e50" />
         </TouchableOpacity>
       </View>
@@ -33,14 +31,16 @@ const TailorScreen = ({ navigation }) => {
         <View style={styles.row}>
           <TouchableOpacity
             style={styles.card}
-            onPress={() => navigation.navigate('AppointmentCalendar')}>
+            onPress={() => navigation.navigate('AppointmentCalendar')}
+          >
             <Ionicons name="calendar-outline" size={26} color="#4e4e4e" />
             <Text style={styles.cardText}>Appointments</Text>
           </TouchableOpacity>
 
           <TouchableOpacity
             style={styles.card}
-            onPress={() => navigation.navigate('TaskManager')}>
+            onPress={() => navigation.navigate('TailorTaskManager')} // ✅ FIXED HERE
+          >
             <FontAwesome5 name="tasks" size={26} color="#4e4e4e" />
             <Text style={styles.cardText}>Task Manager</Text>
           </TouchableOpacity>
@@ -49,14 +49,16 @@ const TailorScreen = ({ navigation }) => {
         <View style={styles.row}>
           <TouchableOpacity
             style={styles.card}
-            onPress={() => navigation.navigate('PaymentScreen')}>
+            onPress={() => navigation.navigate('PaymentScreen')}
+          >
             <FontAwesome5 name="wallet" size={24} color="#4e4e4e" />
             <Text style={styles.cardText}>Payments</Text>
           </TouchableOpacity>
 
           <TouchableOpacity
             style={styles.card}
-            onPress={() => navigation.navigate('OrderManagement')}>
+            onPress={() => navigation.navigate('OrderManagement')}
+          >
             <Ionicons name="clipboard-outline" size={26} color="#4e4e4e" />
             <Text style={styles.cardText}>Order Management</Text>
           </TouchableOpacity>
@@ -65,12 +67,10 @@ const TailorScreen = ({ navigation }) => {
         <View style={styles.row}>
           <TouchableOpacity
             style={styles.card}
-            onPress={() => navigation.navigate('TailorChatScreen', {
-              customerId: 'customer_tMBuwwHBcuetfJKL7VJa1P0GegB2'
-            })}
+            onPress={() => navigation.navigate('TailorChatListScreen')}
           >
             <Ionicons name="chatbubbles-outline" size={26} color="#4e4e4e" />
-            <Text style={styles.cardText}>Chat with Customer</Text>
+            <Text style={styles.cardText}>Customer Chats</Text>
           </TouchableOpacity>
 
           <View style={[styles.card, { backgroundColor: '#f5f5f5' }]}>
@@ -88,14 +88,12 @@ const TailorScreen = ({ navigation }) => {
           <Text style={styles.navText}>Home</Text>
         </TouchableOpacity>
 
-        <TouchableOpacity onPress={() => navigation.navigate('TaskManager')}>
+        <TouchableOpacity onPress={() => navigation.navigate('TailorTaskManager')}>
           <Ionicons name="clipboard-outline" size={24} color="#333" />
           <Text style={styles.navText}>Tasks</Text>
         </TouchableOpacity>
 
-        <TouchableOpacity onPress={() => navigation.navigate('TailorChatScreen', {
-          customerId: 'customer_tMBuwwHBcuetfJKL7VJa1P0GegB2'
-        })}>
+        <TouchableOpacity onPress={() => navigation.navigate('TailorChatListScreen')}>
           <Ionicons name="chatbubble-ellipses-outline" size={24} color="#333" />
           <Text style={styles.navText}>Chats</Text>
         </TouchableOpacity>

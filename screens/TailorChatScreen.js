@@ -1,10 +1,26 @@
 import React, { useEffect, useState, useRef } from 'react';
 import {
-  View, TextInput, TouchableOpacity, FlatList, Text, StyleSheet
+  View,
+  TextInput,
+  TouchableOpacity,
+  FlatList,
+  Text,
+  StyleSheet,
+  KeyboardAvoidingView,
+  Platform,
+  Keyboard,
+  TouchableWithoutFeedback,
 } from 'react-native';
 import {
-  collection, addDoc, onSnapshot, orderBy, query,
-  doc, getDoc, setDoc, serverTimestamp
+  collection,
+  addDoc,
+  onSnapshot,
+  orderBy,
+  query,
+  doc,
+  getDoc,
+  setDoc,
+  serverTimestamp
 } from 'firebase/firestore';
 import { db } from '../firebase/firebaseConfig';
 import { Ionicons } from '@expo/vector-icons';
@@ -79,32 +95,41 @@ const TailorChatScreen = ({ route }) => {
   };
 
   return (
-    <View style={styles.container}>
-      <FlatList
-        ref={flatListRef}
-        data={messages}
-        keyExtractor={item => item.id}
-        renderItem={({ item }) => (
-          <View style={[
-            styles.bubble,
-            item.senderId === 'tailor' ? styles.sent : styles.received
-          ]}>
-            <Text>{item.message}</Text>
+    <KeyboardAvoidingView
+      style={{ flex: 1 }}
+      behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
+      keyboardVerticalOffset={Platform.OS === 'ios' ? 60 : 0}
+    >
+      <TouchableWithoutFeedback onPress={Keyboard.dismiss}>
+        <View style={styles.container}>
+          <FlatList
+            ref={flatListRef}
+            data={messages}
+            keyExtractor={item => item.id}
+            renderItem={({ item }) => (
+              <View style={[
+                styles.bubble,
+                item.senderId === 'tailor' ? styles.sent : styles.received
+              ]}>
+                <Text>{item.message}</Text>
+              </View>
+            )}
+          />
+          <View style={styles.inputContainer}>
+            <TextInput
+              value={input}
+              onChangeText={setInput}
+              placeholder="Type a message..."
+              style={styles.input}
+              multiline
+            />
+            <TouchableOpacity onPress={sendMessage}>
+              <Ionicons name="send" size={24} color="#2196F3" />
+            </TouchableOpacity>
           </View>
-        )}
-      />
-      <View style={styles.inputContainer}>
-        <TextInput
-          value={input}
-          onChangeText={setInput}
-          placeholder="Type a message..."
-          style={styles.input}
-        />
-        <TouchableOpacity onPress={sendMessage}>
-          <Ionicons name="send" size={24} color="#2196F3" />
-        </TouchableOpacity>
-      </View>
-    </View>
+        </View>
+      </TouchableWithoutFeedback>
+    </KeyboardAvoidingView>
   );
 };
 
@@ -131,6 +156,7 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     paddingHorizontal: 10,
     paddingVertical: 6,
+    backgroundColor: '#fff',
   },
   input: {
     flex: 1,
@@ -139,12 +165,17 @@ const styles = StyleSheet.create({
     paddingHorizontal: 16,
     paddingVertical: 8,
     marginRight: 10,
+    maxHeight: 100,
   },
   errorContainer: {
-    flex: 1, justifyContent: 'center', alignItems: 'center',
+    flex: 1,
+    justifyContent: 'center',
+    alignItems: 'center',
   },
   errorText: {
-    color: 'red', fontSize: 18, fontWeight: 'bold'
+    color: 'red',
+    fontSize: 18,
+    fontWeight: 'bold'
   },
 });
 
