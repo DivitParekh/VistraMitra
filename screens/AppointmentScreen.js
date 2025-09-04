@@ -8,6 +8,9 @@ import {
   Platform,
   Alert,
   TextInput,
+  Image,
+  LayoutAnimation,
+  UIManager,
 } from 'react-native';
 import DateTimePicker from '@react-native-community/datetimepicker';
 import { Ionicons } from '@expo/vector-icons';
@@ -19,12 +22,26 @@ import {
   setDoc,
   getDocs,
   query,
+  serverTimestamp,
 } from 'firebase/firestore';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 
+// 🔹 Import local catalog (with categories & images)
+import { catalog } from '../assets/catalogData';
+
+// ✅ Enable smooth animations on Android
+if (Platform.OS === 'android' && UIManager.setLayoutAnimationEnabledExperimental) {
+  UIManager.setLayoutAnimationEnabledExperimental(true);
+}
 
 const AppointmentScreen = () => {
   const [appointments, setAppointments] = useState([]);
+  const [expandedId, setExpandedId] = useState(null);
+
+  const [selectedCategory, setSelectedCategory] = useState(null);
+  const [selectedStyle, setSelectedStyle] = useState(null);
+  const [fabricOption, setFabricOption] = useState('Own Fabric');
+
   const [selectedDate, setSelectedDate] = useState(new Date());
   const [selectedTime, setSelectedTime] = useState(null);
   const [visitType, setVisitType] = useState('Home Visit');
@@ -38,6 +55,7 @@ const AppointmentScreen = () => {
   const [address, setAddress] = useState('');
   const [note, setNote] = useState('');
 
+  // 🔹 Fetch user's existing appointments
   useEffect(() => {
     const fetchAppointments = async () => {
       const uid = await AsyncStorage.getItem('userId');
@@ -51,7 +69,7 @@ const AppointmentScreen = () => {
     fetchAppointments();
   }, []);
 
-  const formatDate = (date) => date.toISOString().split('T')[0]; 
+  const formatDate = (date) => date.toISOString().split('T')[0];
   const formatTime = (date) => {
     const h = date.getHours();
     const m = date.getMinutes();
@@ -60,46 +78,63 @@ const AppointmentScreen = () => {
     return `${hr}:${m.toString().padStart(2, '0')} ${ampm}`;
   };
 
-    const handleBookAppointment = async () => {
-      if (!selectedTime || !name || !phone || !email || !address) {
-        return Alert.alert('Error', 'Please fill all fields and select time');
-      }
-      if (!userId) return Alert.alert('User not logged in');
+  const resetForm = () => {
+    setSelectedTime(null);
+    setVisitType('Home Visit');
+    setSelectedDate(new Date());
+    setName('');
+    setPhone('');
+    setEmail('');
+    setAddress('');
+    setNote('');
+    setFabricOption('Own Fabric');
+    setSelectedCategory(null);
+    setSelectedStyle(null);
+  };
 
-      const newApp = {
-        userId,
-        fullName: name,
-        phone,
-        email,
-        address,
-        note,
-        date: formatDate(selectedDate),
-        time: formatTime(selectedTime),
-        type: visitType,
-        status: 'Pending',
-        createdAt: new Date().toISOString(),
-      };
+  const handleBookAppointment = async () => {
+    if (!selectedTime || !name || !phone || !email || !address || !selectedStyle) {
+      return Alert.alert('Error', 'Please fill all fields and select style/fabric.');
+    }
+    if (!userId) return Alert.alert('User not logged in');
+
+    const newApp = {
+      userId,
+      fullName: name,
+      phone,
+      email,
+      address,
+      note,
+      date: formatDate(selectedDate),
+      time: formatTime(selectedTime),
+      type: visitType,
+      fabric: fabricOption,
+      styleCategory: selectedCategory,
+      styleImage: selectedStyle.uri || null, // ✅ store URI string if available
+      status: 'Pending',
+      createdAt: serverTimestamp(),
+    };
 
     try {
-      // 1. Save under userAppointments (Customer-specific)
       const userAppointmentsRef = collection(db, 'appointments', userId, 'userAppointments');
-      const userAppDoc = doc(userAppointmentsRef); // auto-ID
+      const userAppDoc = doc(userAppointmentsRef);
       await setDoc(userAppDoc, newApp);
 
-      // 2. Also save under tailorAppointments (Global for Tailor)
       const tailorAppointmentsRef = doc(collection(db, 'tailorAppointments'), userAppDoc.id);
       await setDoc(tailorAppointmentsRef, newApp);
 
       setAppointments([...appointments, { ...newApp, id: userAppDoc.id }]);
-      setSelectedTime(null);
-      setVisitType('Home Visit');
-      setSelectedDate(new Date());
-      setName(''); setPhone(''); setEmail(''); setAddress(''); setNote('');
+      resetForm();
       Alert.alert('Success', 'Appointment booked!');
     } catch (err) {
       console.error('Booking Error:', err);
       Alert.alert('Error', 'Something went wrong while booking');
     }
+  };
+
+  const toggleExpand = (id) => {
+    LayoutAnimation.configureNext(LayoutAnimation.Presets.easeInEaseOut);
+    setExpandedId(expandedId === id ? null : id);
   };
 
   return (
@@ -109,35 +144,62 @@ const AppointmentScreen = () => {
         <Ionicons name="calendar-outline" size={24} color="#2c3e50" />
       </View>
 
+      {/* Existing Appointments */}
       {appointments.length === 0 ? (
         <Text style={styles.noAppointment}>No appointments booked yet.</Text>
       ) : (
         <View style={styles.appointmentsList}>
           <Text style={styles.subheading}>Your Appointments</Text>
           {appointments.map((item) => (
-            <View key={item.id} style={styles.appointmentCard}>
-              <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' }}>
-                <View style={{ flex: 1 }}>
+            <TouchableOpacity
+              key={item.id}
+              style={styles.appointmentCard}
+              onPress={() => toggleExpand(item.id)}
+              activeOpacity={0.8}
+            >
+              {/* Summary */}
+              <View style={{ flexDirection: 'row', justifyContent: 'space-between' }}>
+                <View>
                   <Text style={styles.appointmentText}>
                     {item.date} at {item.time} ({item.type})
                   </Text>
-                  <Text style={{ color: '#555', fontSize: 13 }}>{item.fullName}</Text>
+                  <Text style={{ fontSize: 13, color: '#555' }}>{item.fullName}</Text>
                 </View>
                 <View style={[
                   styles.statusBadge,
                   item.status === 'Confirmed' ? styles.statusConfirmed :
-                  item.status === 'Rejected' ? styles.statusRejected :
-                  styles.statusPending
+                    item.status === 'Rejected' ? styles.statusRejected :
+                      styles.statusPending
                 ]}>
                   <Text style={styles.statusText}>{item.status}</Text>
                 </View>
               </View>
-            </View>
+
+              {/* Expanded details */}
+              {expandedId === item.id && (
+                <View style={{ marginTop: 10 }}>
+                  <Text style={{ color: '#777', fontSize: 12 }}>Fabric: {item.fabric}</Text>
+                  <Text style={{ color: '#777', fontSize: 12 }}>Style: {item.styleCategory}</Text>
+                  {item.styleImage && (
+                    <Image
+                      source={{ uri: item.styleImage }}
+                      style={{ width: 80, height: 80, borderRadius: 6, marginVertical: 6 }}
+                    />
+                  )}
+                  {item.note ? (
+                    <Text style={{ fontSize: 12, color: '#666' }}>📝 {item.note}</Text>
+                  ) : null}
+                  <Text style={{ fontSize: 12, color: '#666' }}>📧 {item.email}</Text>
+                  <Text style={{ fontSize: 12, color: '#666' }}>📞 {item.phone}</Text>
+                  <Text style={{ fontSize: 12, color: '#666' }}>🏠 {item.address}</Text>
+                </View>
+              )}
+            </TouchableOpacity>
           ))}
         </View>
       )}
 
-      {/* Form */}
+      {/* Booking Form */}
       <View style={styles.form}>
         <Text style={styles.label}>Your Full Name</Text>
         <TextInput style={styles.input} value={name} onChangeText={setName} placeholder="John Doe" />
@@ -147,13 +209,56 @@ const AppointmentScreen = () => {
         <TextInput style={styles.input} value={email} onChangeText={setEmail} keyboardType="email-address" placeholder="you@example.com" />
         <Text style={styles.label}>Address</Text>
         <TextInput style={styles.input} value={address} onChangeText={setAddress} placeholder="123, Street Name, City" />
-        <Text style={styles.label}>Service Type</Text>
+
+        {/* Fabric Option */}
+        <Text style={styles.label}>Fabric Option</Text>
         <View style={styles.pickerContainer}>
-          <Picker selectedValue={visitType} onValueChange={(value) => setVisitType(value)} style={styles.picker}>
-            <Picker.Item label="Home Visit" value="Home Visit" />
-            <Picker.Item label="Studio Visit" value="Studio Visit" />
+          <Picker selectedValue={fabricOption} onValueChange={(value) => setFabricOption(value)} style={styles.picker}>
+            <Picker.Item label="Own Fabric" value="Own Fabric" />
+            <Picker.Item label="Tailor's Fabric" value="Tailor's Fabric" />
           </Picker>
         </View>
+
+        {/* Catalog Category Picker */}
+        <Text style={styles.label}>Select Category</Text>
+        <View style={styles.pickerContainer}>
+          <Picker
+            selectedValue={selectedCategory}
+            onValueChange={(value) => {
+              setSelectedCategory(value);
+              setSelectedStyle(null);
+            }}
+            style={styles.picker}
+          >
+            <Picker.Item label="-- Select Category --" value={null} />
+            {Object.keys(catalog).map((cat) => (
+              <Picker.Item key={cat} label={cat.charAt(0).toUpperCase() + cat.slice(1)} value={cat} />
+            ))}
+          </Picker>
+        </View>
+
+        {/* Style Selection */}
+        {selectedCategory && (
+          <>
+            <Text style={styles.label}>Choose Style</Text>
+            <ScrollView horizontal showsHorizontalScrollIndicator={false} style={{ marginBottom: 16 }}>
+              {catalog[selectedCategory].map((img, idx) => (
+                <TouchableOpacity
+                  key={idx}
+                  onPress={() => setSelectedStyle({ uri: Image.resolveAssetSource(img).uri })}
+                  style={[
+                    styles.imageOption,
+                    selectedStyle?.uri === Image.resolveAssetSource(img).uri && styles.imageSelected
+                  ]}
+                >
+                  <Image source={img} style={{ width: 80, height: 80, borderRadius: 8 }} />
+                </TouchableOpacity>
+              ))}
+            </ScrollView>
+          </>
+        )}
+
+        {/* Date & Time */}
         <Text style={styles.label}>Preferred Date</Text>
         <TouchableOpacity style={styles.input} onPress={() => setShowDatePicker(true)}>
           <Text>{formatDate(selectedDate)}</Text>
@@ -162,6 +267,7 @@ const AppointmentScreen = () => {
           <DateTimePicker
             mode="date"
             value={selectedDate}
+            minimumDate={new Date()}
             onChange={(e, d) => {
               setShowDatePicker(false);
               if (d) setSelectedDate(d);
@@ -169,6 +275,7 @@ const AppointmentScreen = () => {
             display={Platform.OS === 'ios' ? 'inline' : 'default'}
           />
         )}
+
         <Text style={styles.label}>Preferred Time</Text>
         <TouchableOpacity style={styles.input} onPress={() => setShowTimePicker(true)}>
           <Text>{selectedTime ? formatTime(selectedTime) : 'Tap to pick time'}</Text>
@@ -184,6 +291,8 @@ const AppointmentScreen = () => {
             display={Platform.OS === 'ios' ? 'spinner' : 'default'}
           />
         )}
+
+        {/* Notes */}
         <Text style={styles.label}>Special Note</Text>
         <TextInput
           style={[styles.input, { height: 80 }]}
@@ -192,6 +301,8 @@ const AppointmentScreen = () => {
           onChangeText={setNote}
           placeholder="e.g. Looking for a slim-fit navy suit..."
         />
+
+        {/* Submit */}
         <TouchableOpacity style={styles.bookBtn} onPress={handleBookAppointment}>
           <Text style={styles.bookBtnText}>Submit Appointment Request</Text>
         </TouchableOpacity>
@@ -213,22 +324,9 @@ const styles = StyleSheet.create({
     justifyContent: 'space-between',
   },
   headerTitle: { fontSize: 20, fontWeight: '700', color: '#2c3e50' },
-  noAppointment: {
-    textAlign: 'center',
-    color: '#999',
-    marginTop: 40,
-    fontSize: 16,
-  },
-  appointmentsList: {
-    paddingHorizontal: 20,
-    marginTop: 24,
-  },
-  subheading: {
-    fontSize: 16,
-    fontWeight: '600',
-    color: '#2c3e50',
-    marginBottom: 12,
-  },
+  noAppointment: { textAlign: 'center', color: '#999', marginTop: 40, fontSize: 16 },
+  appointmentsList: { paddingHorizontal: 20, marginTop: 24 },
+  subheading: { fontSize: 16, fontWeight: '600', color: '#2c3e50', marginBottom: 12 },
   appointmentCard: {
     backgroundColor: '#fff',
     padding: 14,
@@ -236,20 +334,9 @@ const styles = StyleSheet.create({
     marginBottom: 12,
     elevation: 2,
   },
-  appointmentText: {
-    fontSize: 14,
-    color: '#333',
-  },
-  form: {
-    marginTop: 30,
-    paddingHorizontal: 20,
-  },
-  label: {
-    fontSize: 14,
-    fontWeight: '600',
-    color: '#333',
-    marginBottom: 6,
-  },
+  appointmentText: { fontSize: 14, color: '#333' },
+  form: { marginTop: 30, paddingHorizontal: 20 },
+  label: { fontSize: 14, fontWeight: '600', color: '#333', marginBottom: 6 },
   input: {
     backgroundColor: '#fff',
     padding: 14,
@@ -266,10 +353,7 @@ const styles = StyleSheet.create({
     marginBottom: 16,
     overflow: 'hidden',
   },
-  picker: {
-    height: 50,
-    width: '100%',
-  },
+  picker: { height: 50, width: '100%' },
   bookBtn: {
     backgroundColor: '#007bff',
     paddingVertical: 14,
@@ -277,30 +361,19 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     marginTop: 10,
   },
-  bookBtnText: {
-    color: '#fff',
-    fontWeight: '600',
-    fontSize: 16,
-  },
+  bookBtnText: { color: '#fff', fontWeight: '600', fontSize: 16 },
   statusBadge: {
     paddingHorizontal: 10,
     paddingVertical: 4,
     borderRadius: 12,
+    alignSelf: 'flex-start',
   },
-  statusText: {
-    fontSize: 12,
-    fontWeight: '600',
-    color: '#fff',
-  },
-  statusPending: {
-    backgroundColor: '#f39c12',
-  },
-  statusConfirmed: {
-    backgroundColor: '#27ae60',
-  },
-  statusRejected: {
-    backgroundColor: '#e74c3c',
-  },
+  statusText: { fontSize: 12, fontWeight: '600', color: '#fff' },
+  statusPending: { backgroundColor: '#f39c12' },
+  statusConfirmed: { backgroundColor: '#27ae60' },
+  statusRejected: { backgroundColor: '#e74c3c' },
+  imageOption: { marginRight: 10, borderWidth: 2, borderColor: 'transparent', borderRadius: 8 },
+  imageSelected: { borderColor: '#007bff' },
 });
 
 export default AppointmentScreen;

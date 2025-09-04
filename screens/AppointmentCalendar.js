@@ -13,8 +13,10 @@ import { Calendar } from 'react-native-calendars';
 import {
   collection,
   onSnapshot,
-  updateDoc,
+  setDoc,
   doc,
+  addDoc,
+  serverTimestamp,
 } from 'firebase/firestore';
 import { db } from '../firebase/firebaseConfig';
 
@@ -56,16 +58,56 @@ const AppointmentCalendar = () => {
     setMarkedDates(marks);
   };
 
-  const updateStatus = async (id, newStatus, userId) => {
-    try {
-      await updateDoc(doc(db, 'tailorAppointments', id), { status: newStatus });
-      await updateDoc(doc(db, 'appointments', userId, 'userAppointments', id), { status: newStatus });
-      Alert.alert('Success', `Appointment marked as ${newStatus}`);
-    } catch (err) {
-      console.error('Error updating status:', err);
-      Alert.alert('Error', 'Could not update appointment status');
+  const updateStatus = async (id, newStatus, userId, appointment) => {
+  try {
+    let orderRef = null;
+
+    // 1. If confirmed → Create Order + Tasks
+    if (newStatus === 'Confirmed') {
+      orderRef = await addDoc(collection(db, 'orders'), {
+        userId: userId, // ✅ store customer UID for filtering
+        appointmentId: id,
+        customerName: appointment.fullName,
+        style: appointment.style || null,
+        fabric: appointment.fabric || null,
+        address: appointment.address,
+        date: appointment.date,
+        time: appointment.time,
+        status: 'Confirmed',
+        createdAt: serverTimestamp(),
+      });
+
+      // Auto-generate tasks
+      const stages = ['Cutting', 'Stitching', 'Handwork', 'Packaging'];
+      for (const stage of stages) {
+        await addDoc(collection(db, 'taskManager'), {
+          orderId: orderRef.id,
+          userId: userId,
+          customerName: appointment.fullName,
+          stage,
+          status: 'Pending',
+          createdAt: serverTimestamp(),
+        });
+      }
     }
-  };
+
+    // 2. Merge status + orderId into existing appointment (don’t lose data)
+    const updateData = {
+      ...appointment, // keep old fields
+      status: newStatus,
+      ...(orderRef ? { orderId: orderRef.id } : {}),
+    };
+
+    await setDoc(doc(db, 'tailorAppointments', id), updateData, { merge: true });
+    await setDoc(doc(db, 'appointments', userId, 'userAppointments', id), updateData, { merge: true });
+
+    Alert.alert('Success', `Appointment marked as ${newStatus}`);
+  } catch (err) {
+    console.error('Error updating status:', err);
+    Alert.alert('Error', 'Could not update appointment status');
+  }
+};
+
 
   const filteredAppointments = selectedDate
     ? appointments.filter((app) => app.date === selectedDate)
@@ -128,32 +170,33 @@ const AppointmentCalendar = () => {
                 <Ionicons name="calendar" size={16} /> {item.date} —{' '}
                 <Ionicons name="time-outline" size={16} /> {item.time}
               </Text>
-              <Text style={styles.cardText}>
-                👤 {item.type}{' '}
-                <Text
-                  style={[
-                    styles.statusBadge,
-                    item.status === 'Confirmed'
-                      ? styles.confirmed
-                      : item.status === 'Pending'
-                      ? styles.pending
-                      : styles.declined,
-                  ]}>
-                  {item.status}
-                </Text>
+              <Text style={styles.cardText}>👤 {item.fullName}</Text>
+              <Text style={styles.cardText}>📞 {item.phone}</Text>
+              <Text style={styles.cardText}>📌 Fabric: {item.fabric || 'N/A'}</Text>
+              <Text style={styles.cardText}>🎨 Style: {item.style || 'N/A'}</Text>
+              <Text
+                style={[
+                  styles.statusBadge,
+                  item.status === 'Confirmed'
+                    ? styles.confirmed
+                    : item.status === 'Pending'
+                    ? styles.pending
+                    : styles.rejected,
+                ]}>
+                {item.status}
               </Text>
 
               {item.status === 'Pending' && (
                 <View style={styles.buttonRow}>
                   <TouchableOpacity
                     style={styles.confirmBtn}
-                    onPress={() => updateStatus(item.id, 'Confirmed', item.userId)}>
+                    onPress={() => updateStatus(item.id, 'Confirmed', item.userId, item)}>
                     <Text style={styles.btnText}>Confirm</Text>
                   </TouchableOpacity>
                   <TouchableOpacity
                     style={styles.declineBtn}
-                    onPress={() => updateStatus(item.id, 'Declined', item.userId)}>
-                    <Text style={styles.btnText}>Decline</Text>
+                    onPress={() => updateStatus(item.id, 'Rejected', item.userId, item)}>
+                    <Text style={styles.btnText}>Reject</Text>
                   </TouchableOpacity>
                 </View>
               )}
@@ -174,22 +217,13 @@ const styles = StyleSheet.create({
     padding: 20,
     paddingBottom: 10,
   },
-  headerTitle: {
-    fontSize: 20,
-    fontWeight: '700',
-    color: '#2c3e50',
-  },
+  headerTitle: { fontSize: 20, fontWeight: '700', color: '#2c3e50' },
   appointmentsList: {
     paddingHorizontal: 20,
     paddingTop: 10,
     paddingBottom: 80,
   },
-  dateHeading: {
-    fontSize: 16,
-    fontWeight: '600',
-    marginBottom: 16,
-    color: '#2c3e50',
-  },
+  dateHeading: { fontSize: 16, fontWeight: '600', marginBottom: 16, color: '#2c3e50' },
   card: {
     backgroundColor: '#fff',
     padding: 16,
@@ -199,37 +233,20 @@ const styles = StyleSheet.create({
     borderLeftWidth: 5,
     borderLeftColor: '#5DA3FA',
   },
-  cardText: {
-    fontSize: 14,
-    color: '#34495e',
-    marginBottom: 6,
-  },
+  cardText: { fontSize: 14, color: '#34495e', marginBottom: 6 },
   statusBadge: {
     fontWeight: 'bold',
     paddingHorizontal: 8,
     paddingVertical: 2,
     borderRadius: 12,
     overflow: 'hidden',
-    marginLeft: 10,
+    marginTop: 6,
     fontSize: 12,
   },
-  pending: {
-    backgroundColor: '#fce4b3',
-    color: '#e67e22',
-  },
-  confirmed: {
-    backgroundColor: '#d4edda',
-    color: '#27ae60',
-  },
-  declined: {
-    backgroundColor: '#f8d7da',
-    color: '#c0392b',
-  },
-  buttonRow: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    marginTop: 12,
-  },
+  pending: { backgroundColor: '#fce4b3', color: '#e67e22' },
+  confirmed: { backgroundColor: '#d4edda', color: '#27ae60' },
+  rejected: { backgroundColor: '#f8d7da', color: '#c0392b' },
+  buttonRow: { flexDirection: 'row', justifyContent: 'space-between', marginTop: 12 },
   confirmBtn: {
     backgroundColor: '#27ae60',
     padding: 10,
@@ -244,15 +261,8 @@ const styles = StyleSheet.create({
     width: '48%',
     alignItems: 'center',
   },
-  btnText: {
-    color: '#fff',
-    fontWeight: '600',
-  },
-  loadingContainer: {
-    flex: 1,
-    justifyContent: 'center',
-    alignItems: 'center',
-  },
+  btnText: { color: '#fff', fontWeight: '600' },
+  loadingContainer: { flex: 1, justifyContent: 'center', alignItems: 'center' },
 });
 
 export default AppointmentCalendar;

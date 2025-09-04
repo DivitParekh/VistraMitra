@@ -11,7 +11,6 @@ import {
   Ionicons,
   MaterialCommunityIcons,
   FontAwesome5,
-  Feather,
 } from '@expo/vector-icons';
 
 const CustomerScreen = ({ navigation }) => {
@@ -40,10 +39,10 @@ const CustomerScreen = ({ navigation }) => {
           onPress={() => navigation.navigate('Promotions')}
         >
           <Text style={styles.promoText}>🎉 10% OFF on first stitching</Text>
-          <Text style={styles.promoSub}>Tap to claim offer  </Text>
+          <Text style={styles.promoSub}>Tap to claim offer</Text>
         </TouchableOpacity>
 
-        {/* Quick Actions Row */}
+        {/* Quick Actions Row 1 */}
         <View style={styles.row}>
           <TouchableOpacity
             style={styles.card}
@@ -54,23 +53,32 @@ const CustomerScreen = ({ navigation }) => {
           </TouchableOpacity>
 
           <TouchableOpacity
-              style={styles.card}
-              onPress={() => navigation.navigate('ChatScreen')}
-            >
-              <Ionicons name="chatbubble-ellipses-outline" size={26} color="#4e4e4e" />
-              <Text style={styles.cardText}>Tailor Chat</Text>
-            </TouchableOpacity>
-
+            style={styles.card}
+            onPress={() => navigation.navigate('ChatScreen')}
+          >
+            <Ionicons name="chatbubble-ellipses-outline" size={26} color="#4e4e4e" />
+            <Text style={styles.cardText}>Tailor Chat</Text>
+          </TouchableOpacity>
         </View>
 
-        {/* Full-width Saved Styles */}
-        <TouchableOpacity
-          style={styles.singleCard}
-          onPress={() => navigation.navigate('SavedStyles')}
-        >
-          <Ionicons name="heart-outline" size={28} color="#4e4e4e" />
-          <Text style={styles.cardText}>Saved Styles</Text>
-        </TouchableOpacity>
+        {/* Quick Actions Row 2 */}
+        <View style={styles.row}>
+          <TouchableOpacity
+            style={styles.card}
+            onPress={() => navigation.navigate('SavedStyles')}
+          >
+            <Ionicons name="heart-outline" size={28} color="#4e4e4e" />
+            <Text style={styles.cardText}>Saved Styles</Text>
+          </TouchableOpacity>
+
+          <TouchableOpacity
+            style={styles.card}
+            onPress={() => navigation.navigate('CatalogScreen')}
+          >
+            <FontAwesome5 name="tshirt" size={24} color="#4e4e4e" />
+            <Text style={styles.cardText}>Catalog</Text>
+          </TouchableOpacity>
+        </View>
 
         <View style={{ height: 80 }} />
       </ScrollView>
@@ -92,12 +100,12 @@ const CustomerScreen = ({ navigation }) => {
           <Text style={styles.navText}>Catalog</Text>
         </TouchableOpacity>
 
-        <TouchableOpacity onPress={() => navigation.navigate('DeliveryCalendar')}>
+        <TouchableOpacity onPress={() => navigation.navigate('OrderScreen')}>
           <MaterialCommunityIcons name="clipboard-list-outline" size={24} color="#333" />
-          <Text style={styles.navText}>Order</Text>
+          <Text style={styles.navText}>Orders</Text>
         </TouchableOpacity>
 
-        <TouchableOpacity onPress={() => navigation.navigate('Profile')}>
+        <TouchableOpacity onPress={() => navigation.navigate('ProfileScreen')}>
           <Ionicons name="person-circle-outline" size={24} color="#333" />
           <Text style={styles.navText}>Profile</Text>
         </TouchableOpacity>
@@ -174,19 +182,6 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'center',
     elevation: 4,
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.2,
-    shadowRadius: 4,
-  },
-  singleCard: {
-    backgroundColor: '#fff',
-    borderRadius: 16,
-    paddingVertical: 24,
-    alignItems: 'center',
-    justifyContent: 'center',
-    elevation: 4,
-    marginTop: 16,
     shadowColor: '#000',
     shadowOffset: { width: 0, height: 2 },
     shadowOpacity: 0.2,

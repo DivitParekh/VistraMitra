@@ -7,8 +7,7 @@ import {
   StyleSheet,
   ActivityIndicator,
   Modal,
-  TextInput,
-  Alert
+  Alert,
 } from 'react-native';
 import {
   collection,
@@ -22,9 +21,11 @@ import {
 } from 'firebase/firestore';
 import { db } from '../firebase/firebaseConfig';
 import { Ionicons } from '@expo/vector-icons';
+import { Picker } from '@react-native-picker/picker'; // dropdown
 
 const TailorTaskManager = () => {
   const [tasks, setTasks] = useState([]);
+  const [orders, setOrders] = useState([]); // all orders
   const [loading, setLoading] = useState(true);
 
   const [modalVisible, setModalVisible] = useState(false);
@@ -34,33 +35,42 @@ const TailorTaskManager = () => {
     orderId: '',
   });
 
+  // fetch tasks
   useEffect(() => {
     const q = query(collection(db, 'taskManager'), orderBy('createdAt', 'asc'));
-
     const unsubscribe = onSnapshot(q, (snapshot) => {
-      const taskData = snapshot.docs.map(doc => ({
+      const taskData = snapshot.docs.map((doc) => ({
         id: doc.id,
-        ...doc.data()
+        ...doc.data(),
       }));
       setTasks(taskData);
       setLoading(false);
     });
+    return () => unsubscribe();
+  }, []);
 
+  // fetch orders
+  useEffect(() => {
+    const unsubscribe = onSnapshot(collection(db, 'orders'), (snapshot) => {
+      const orderData = snapshot.docs.map((doc) => ({
+        id: doc.id,
+        ...doc.data(),
+      }));
+      setOrders(orderData);
+    });
     return () => unsubscribe();
   }, []);
 
   const updateStatus = async (taskId, newStatus) => {
     const taskRef = doc(db, 'taskManager', taskId);
-    await updateDoc(taskRef, {
-      status: newStatus,
-    });
+    await updateDoc(taskRef, { status: newStatus });
   };
 
   const handleAddTask = async () => {
     const { title, customerName, orderId } = newTask;
 
     if (!title || !customerName || !orderId) {
-      Alert.alert('Missing Fields', 'Please fill in all the fields.');
+      Alert.alert('Missing Fields', 'Please select an order and enter title.');
       return;
     }
 
@@ -86,19 +96,21 @@ const TailorTaskManager = () => {
       <Text style={styles.subtext}>Status: {item.status}</Text>
 
       <View style={styles.buttonGroup}>
-        {['Pending', 'In Progress', 'Done'].map(status => (
+        {['Pending', 'In Progress', 'Done'].map((status) => (
           <TouchableOpacity
             key={status}
             style={[
               styles.statusButton,
-              item.status === status && styles.activeButton
+              item.status === status && styles.activeButton,
             ]}
             onPress={() => updateStatus(item.id, status)}
           >
-            <Text style={[
-              styles.statusText,
-              item.status === status && styles.activeText
-            ]}>
+            <Text
+              style={[
+                styles.statusText,
+                item.status === status && styles.activeText,
+              ]}
+            >
               {status}
             </Text>
           </TouchableOpacity>
@@ -121,7 +133,7 @@ const TailorTaskManager = () => {
         <FlatList
           data={tasks}
           renderItem={renderTask}
-          keyExtractor={item => item.id}
+          keyExtractor={(item) => item.id}
           contentContainerStyle={{ paddingBottom: 100 }}
         />
       )}
@@ -131,24 +143,44 @@ const TailorTaskManager = () => {
         <View style={styles.modalOverlay}>
           <View style={styles.modalContent}>
             <Text style={styles.modalTitle}>Add New Task</Text>
-            <TextInput
-              placeholder="Task Title"
-              style={styles.input}
-              value={newTask.title}
-              onChangeText={(text) => setNewTask({ ...newTask, title: text })}
-            />
-            <TextInput
-              placeholder="Customer Name"
-              style={styles.input}
-              value={newTask.customerName}
-              onChangeText={(text) => setNewTask({ ...newTask, customerName: text })}
-            />
-            <TextInput
-              placeholder="Order ID"
-              style={styles.input}
-              value={newTask.orderId}
-              onChangeText={(text) => setNewTask({ ...newTask, orderId: text })}
-            />
+
+            {/* Select Order */}
+            <Text style={{ marginBottom: 6 }}>Select Order</Text>
+            <Picker
+              selectedValue={newTask.orderId}
+              onValueChange={(val) => {
+                const order = orders.find((o) => o.id === val);
+                setNewTask({
+                  ...newTask,
+                  orderId: val,
+                  customerName: order?.customerName || '',
+                });
+              }}
+              style={styles.picker}
+            >
+              <Picker.Item label="Select Order" value="" />
+              {orders.map((o) => (
+                <Picker.Item
+                  key={o.id}
+                  label={`${o.customerName} (${o.id})`}
+                  value={o.id}
+                />
+              ))}
+            </Picker>
+
+            {/* Task Title */}
+            <Text style={{ marginBottom: 6 }}>Task Title</Text>
+            <Picker
+              selectedValue={newTask.title}
+              onValueChange={(val) => setNewTask({ ...newTask, title: val })}
+              style={styles.picker}
+            >
+              <Picker.Item label="Select Task" value="" />
+              <Picker.Item label="Cutting" value="Cutting" />
+              <Picker.Item label="Stitching" value="Stitching" />
+              <Picker.Item label="Handwork" value="Handwork" />
+              <Picker.Item label="Packaging" value="Packaging" />
+            </Picker>
 
             <View style={styles.modalActions}>
               <TouchableOpacity onPress={() => setModalVisible(false)}>
@@ -203,18 +235,9 @@ const styles = StyleSheet.create({
     borderWidth: 1,
     borderColor: '#ccc',
   },
-  statusText: {
-    fontSize: 14,
-    color: '#444',
-  },
-  activeButton: {
-    backgroundColor: '#2196F3',
-    borderColor: '#1976D2',
-  },
-  activeText: {
-    color: '#fff',
-    fontWeight: '600',
-  },
+  statusText: { fontSize: 14, color: '#444' },
+  activeButton: { backgroundColor: '#2196F3', borderColor: '#1976D2' },
+  activeText: { color: '#fff', fontWeight: '600' },
   fab: {
     position: 'absolute',
     right: 20,
@@ -243,29 +266,19 @@ const styles = StyleSheet.create({
     fontWeight: 'bold',
     marginBottom: 12,
   },
-  input: {
+  picker: {
     borderWidth: 1,
     borderColor: '#ccc',
     borderRadius: 6,
-    paddingHorizontal: 12,
-    paddingVertical: 8,
-    marginBottom: 10,
+    marginBottom: 12,
   },
   modalActions: {
     flexDirection: 'row',
     justifyContent: 'flex-end',
     marginTop: 10,
   },
-  cancelBtn: {
-    marginRight: 16,
-    color: '#888',
-    fontSize: 16,
-  },
-  saveBtn: {
-    color: '#2196F3',
-    fontWeight: 'bold',
-    fontSize: 16,
-  },
+  cancelBtn: { marginRight: 16, color: '#888', fontSize: 16 },
+  saveBtn: { color: '#2196F3', fontWeight: 'bold', fontSize: 16 },
 });
 
 export default TailorTaskManager;

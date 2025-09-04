@@ -7,7 +7,7 @@ import {
   ScrollView,
   TouchableOpacity,
 } from 'react-native';
-import { Ionicons, FontAwesome5 } from '@expo/vector-icons';
+import { Ionicons, FontAwesome5, MaterialCommunityIcons } from '@expo/vector-icons';
 
 const TailorScreen = ({ navigation }) => {
   return (
@@ -39,7 +39,7 @@ const TailorScreen = ({ navigation }) => {
 
           <TouchableOpacity
             style={styles.card}
-            onPress={() => navigation.navigate('TailorTaskManager')} // ✅ FIXED HERE
+            onPress={() => navigation.navigate('TailorTaskManager')}
           >
             <FontAwesome5 name="tasks" size={26} color="#4e4e4e" />
             <Text style={styles.cardText}>Task Manager</Text>
@@ -73,9 +73,13 @@ const TailorScreen = ({ navigation }) => {
             <Text style={styles.cardText}>Customer Chats</Text>
           </TouchableOpacity>
 
-          <View style={[styles.card, { backgroundColor: '#f5f5f5' }]}>
-            <Text style={styles.cardText}>Coming Soon</Text>
-          </View>
+          <TouchableOpacity
+            style={styles.card}
+            onPress={() => navigation.navigate('MeasurementBook')}
+          >
+            <MaterialCommunityIcons name="tape-measure" size={30} color="#4e4e4e" />
+            <Text style={styles.cardText}>Measurements</Text>
+          </TouchableOpacity>
         </View>
 
         <View style={{ height: 80 }} />
