@@ -75,7 +75,7 @@ const TailorScreen = ({ navigation }) => {
 
           <TouchableOpacity
             style={styles.card}
-            onPress={() => navigation.navigate('MeasurementBook')}
+            onPress={() => navigation.navigate('TailorMeasurementBook')}
           >
             <MaterialCommunityIcons name="tape-measure" size={30} color="#4e4e4e" />
             <Text style={styles.cardText}>Measurements</Text>
@@ -102,12 +102,12 @@ const TailorScreen = ({ navigation }) => {
           <Text style={styles.navText}>Chats</Text>
         </TouchableOpacity>
 
-        <TouchableOpacity onPress={() => navigation.navigate('MeasurementBook')}>
+        <TouchableOpacity onPress={() => navigation.navigate('CustomerList')}>
           <Ionicons name="people-outline" size={24} color="#333" />
           <Text style={styles.navText}>Customers</Text>
         </TouchableOpacity>
 
-        <TouchableOpacity onPress={() => navigation.navigate('Profile')}>
+        <TouchableOpacity onPress={() => navigation.navigate('ProfileScreen')}>
           <Ionicons name="person-circle-outline" size={24} color="#333" />
           <Text style={styles.navText}>Profile</Text>
         </TouchableOpacity>

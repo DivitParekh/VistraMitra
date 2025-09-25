@@ -19,21 +19,24 @@ import {
   orderBy,
   serverTimestamp,
 } from 'firebase/firestore';
-import { db } from '../firebase/firebaseConfig';
+import { db, auth } from '../firebase/firebaseConfig';
 import { Ionicons } from '@expo/vector-icons';
-import { Picker } from '@react-native-picker/picker'; // dropdown
+import { Picker } from '@react-native-picker/picker';
+
+const TAILOR_UID = 'YvjGOga1CDWJhJfoxAvL7c7Z5sG2';
 
 const TailorTaskManager = () => {
   const [tasks, setTasks] = useState([]);
-  const [orders, setOrders] = useState([]); // all orders
+  const [orders, setOrders] = useState([]);
   const [loading, setLoading] = useState(true);
-
   const [modalVisible, setModalVisible] = useState(false);
   const [newTask, setNewTask] = useState({
     title: '',
     customerName: '',
     orderId: '',
   });
+
+  const currentUser = auth.currentUser;
 
   // fetch tasks
   useEffect(() => {
@@ -61,14 +64,18 @@ const TailorTaskManager = () => {
     return () => unsubscribe();
   }, []);
 
+  // update status (tailor only)
   const updateStatus = async (taskId, newStatus) => {
+    if (currentUser?.uid !== TAILOR_UID) return; // stop customers
     const taskRef = doc(db, 'taskManager', taskId);
     await updateDoc(taskRef, { status: newStatus });
   };
 
+  // add task (tailor only)
   const handleAddTask = async () => {
-    const { title, customerName, orderId } = newTask;
+    if (currentUser?.uid !== TAILOR_UID) return; // stop customers
 
+    const { title, customerName, orderId } = newTask;
     if (!title || !customerName || !orderId) {
       Alert.alert('Missing Fields', 'Please select an order and enter title.');
       return;
@@ -95,27 +102,30 @@ const TailorTaskManager = () => {
       <Text style={styles.subtext}>Order ID: {item.orderId}</Text>
       <Text style={styles.subtext}>Status: {item.status}</Text>
 
-      <View style={styles.buttonGroup}>
-        {['Pending', 'In Progress', 'Done'].map((status) => (
-          <TouchableOpacity
-            key={status}
-            style={[
-              styles.statusButton,
-              item.status === status && styles.activeButton,
-            ]}
-            onPress={() => updateStatus(item.id, status)}
-          >
-            <Text
+      {/* Tailor can update tasks, customers just see */}
+      {currentUser?.uid === TAILOR_UID && (
+        <View style={styles.buttonGroup}>
+          {['Pending', 'In Progress', 'Done'].map((status) => (
+            <TouchableOpacity
+              key={status}
               style={[
-                styles.statusText,
-                item.status === status && styles.activeText,
+                styles.statusButton,
+                item.status === status && styles.activeButton,
               ]}
+              onPress={() => updateStatus(item.id, status)}
             >
-              {status}
-            </Text>
-          </TouchableOpacity>
-        ))}
-      </View>
+              <Text
+                style={[
+                  styles.statusText,
+                  item.status === status && styles.activeText,
+                ]}
+              >
+                {status}
+              </Text>
+            </TouchableOpacity>
+          ))}
+        </View>
+      )}
     </View>
   );
 
@@ -138,69 +148,70 @@ const TailorTaskManager = () => {
         />
       )}
 
-      {/* Add Task Modal */}
-      <Modal visible={modalVisible} animationType="slide" transparent>
-        <View style={styles.modalOverlay}>
-          <View style={styles.modalContent}>
-            <Text style={styles.modalTitle}>Add New Task</Text>
+      {/* Add Task - Tailor only */}
+      {currentUser?.uid === TAILOR_UID && (
+        <>
+          <Modal visible={modalVisible} animationType="slide" transparent>
+            <View style={styles.modalOverlay}>
+              <View style={styles.modalContent}>
+                <Text style={styles.modalTitle}>Add New Task</Text>
 
-            {/* Select Order */}
-            <Text style={{ marginBottom: 6 }}>Select Order</Text>
-            <Picker
-              selectedValue={newTask.orderId}
-              onValueChange={(val) => {
-                const order = orders.find((o) => o.id === val);
-                setNewTask({
-                  ...newTask,
-                  orderId: val,
-                  customerName: order?.customerName || '',
-                });
-              }}
-              style={styles.picker}
-            >
-              <Picker.Item label="Select Order" value="" />
-              {orders.map((o) => (
-                <Picker.Item
-                  key={o.id}
-                  label={`${o.customerName} (${o.id})`}
-                  value={o.id}
-                />
-              ))}
-            </Picker>
+                <Text style={{ marginBottom: 6 }}>Select Order</Text>
+                <Picker
+                  selectedValue={newTask.orderId}
+                  onValueChange={(val) => {
+                    const order = orders.find((o) => o.id === val);
+                    setNewTask({
+                      ...newTask,
+                      orderId: val,
+                      customerName: order?.customerName || '',
+                    });
+                  }}
+                  style={styles.picker}
+                >
+                  <Picker.Item label="Select Order" value="" />
+                  {orders.map((o) => (
+                    <Picker.Item
+                      key={o.id}
+                      label={`${o.customerName} (${o.id})`}
+                      value={o.id}
+                    />
+                  ))}
+                </Picker>
 
-            {/* Task Title */}
-            <Text style={{ marginBottom: 6 }}>Task Title</Text>
-            <Picker
-              selectedValue={newTask.title}
-              onValueChange={(val) => setNewTask({ ...newTask, title: val })}
-              style={styles.picker}
-            >
-              <Picker.Item label="Select Task" value="" />
-              <Picker.Item label="Cutting" value="Cutting" />
-              <Picker.Item label="Stitching" value="Stitching" />
-              <Picker.Item label="Handwork" value="Handwork" />
-              <Picker.Item label="Packaging" value="Packaging" />
-            </Picker>
+                <Text style={{ marginBottom: 6 }}>Task Title</Text>
+                <Picker
+                  selectedValue={newTask.title}
+                  onValueChange={(val) => setNewTask({ ...newTask, title: val })}
+                  style={styles.picker}
+                >
+                  <Picker.Item label="Select Task" value="" />
+                  <Picker.Item label="Cutting" value="Cutting" />
+                  <Picker.Item label="Stitching" value="Stitching" />
+                  <Picker.Item label="Handwork" value="Handwork" />
+                  <Picker.Item label="Packaging" value="Packaging" />
+                </Picker>
 
-            <View style={styles.modalActions}>
-              <TouchableOpacity onPress={() => setModalVisible(false)}>
-                <Text style={styles.cancelBtn}>Cancel</Text>
-              </TouchableOpacity>
-              <TouchableOpacity onPress={handleAddTask}>
-                <Text style={styles.saveBtn}>Add</Text>
-              </TouchableOpacity>
+                <View style={styles.modalActions}>
+                  <TouchableOpacity onPress={() => setModalVisible(false)}>
+                    <Text style={styles.cancelBtn}>Cancel</Text>
+                  </TouchableOpacity>
+                  <TouchableOpacity onPress={handleAddTask}>
+                    <Text style={styles.saveBtn}>Add</Text>
+                  </TouchableOpacity>
+                </View>
+              </View>
             </View>
-          </View>
-        </View>
-      </Modal>
+          </Modal>
 
-      {/* Floating Action Button */}
-      <TouchableOpacity
-        style={styles.fab}
-        onPress={() => setModalVisible(true)}
-      >
-        <Ionicons name="add" size={28} color="#fff" />
-      </TouchableOpacity>
+          <TouchableOpacity
+            style={styles.fab}
+            onPress={() => setModalVisible(true)}
+          >
+            <Ionicons name="add" size={28} color="#fff" />
+          </TouchableOpacity>
+        </>
+      )}
     </View>
   );
 };

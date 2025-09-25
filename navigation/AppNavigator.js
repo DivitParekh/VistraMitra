@@ -12,42 +12,54 @@ import AppointmentScreen from '../screens/AppointmentScreen';
 import CatalogScreen from '../screens/CatalogScreen';
 import CategoryStylesScreen from '../screens/CategoryStylesScreen';
 import SavedStylesScreen from '../screens/SavedStylesScreen';
-import MeasurementBook from '../screens/MeasurementBook';
 import OrderScreen from '../screens/OrderScreen';
 
 import TailorScreen from '../screens/TailorScreen';
 import AppointmentCalendar from '../screens/AppointmentCalendar';
 import TailorChatScreen from '../screens/TailorChatScreen';
+import TailorChatListScreen from '../screens/TailorChatListScreen';
 import TailorTaskManager from '../screens/TailorTaskManager';
 import TailorMeasurementBook from '../screens/TailorMeasurementBook';
-import CustomerMeasurementDetail from '../screens/CustomerMeasurementDetail';
 import OrderManagement from '../screens/OrderManagement';
-
+import CustomerList from '../screens/CustomerList';
+import CustomerMeasurmentDetail from '../screens/CustomerMeasurementDetail';
 import ChatScreen from '../screens/ChatScreen';
 import ProfileScreen from '../screens/ProfileScreen';
 
 const Stack = createNativeStackNavigator();
 
 const AppNavigator = ({ showOnboarding }) => {
-  const [initialRoute, setInitialRoute] = useState('Onboarding');
+  const [initialRoute, setInitialRoute] = useState(null); // start as null
+  const [loading, setLoading] = useState(true); // loading state
 
-  // ✅ Check login & role when app starts
   useEffect(() => {
     const checkLogin = async () => {
-      const isLoggedIn = await AsyncStorage.getItem('isLoggedIn');
-      const role = await AsyncStorage.getItem('userRole');
+      try {
+        const isLoggedIn = await AsyncStorage.getItem('isLoggedIn');
+        const role = await AsyncStorage.getItem('userRole');
 
-      if (showOnboarding) {
-        setInitialRoute('Onboarding');
-      } else if (isLoggedIn === 'true') {
-        setInitialRoute(role === 'tailor' ? 'TailorScreen' : 'CustomerScreen');
-      } else {
+        if (showOnboarding) {
+          setInitialRoute('Onboarding');
+        } else if (isLoggedIn === 'true') {
+          setInitialRoute(role === 'tailor' ? 'TailorScreen' : 'CustomerScreen');
+        } else {
+          setInitialRoute('Login');
+        }
+      } catch (error) {
+        console.error('AsyncStorage error:', error);
         setInitialRoute('Login');
+      } finally {
+        setLoading(false);
       }
     };
 
     checkLogin();
   }, [showOnboarding]);
+
+  // show nothing (or a splash screen) while checking AsyncStorage
+  if (loading || !initialRoute) {
+    return null;
+  }
 
   return (
     <Stack.Navigator initialRouteName={initialRoute} screenOptions={{ headerShown: false }}>
@@ -63,17 +75,18 @@ const AppNavigator = ({ showOnboarding }) => {
       <Stack.Screen name="CatalogScreen" component={CatalogScreen} />
       <Stack.Screen name="CategoryStylesScreen" component={CategoryStylesScreen} />
       <Stack.Screen name="SavedStyles" component={SavedStylesScreen} />
-      <Stack.Screen name="MeasurementBook" component={MeasurementBook} />
-      <Stack.Screen name="Orders" component={OrderScreen} />
+      <Stack.Screen name="CustomerMeasurementDetail" component={CustomerMeasurmentDetail} />
+      <Stack.Screen name="OrderScreen" component={OrderScreen} />
 
       {/* Tailor */}
       <Stack.Screen name="TailorScreen" component={TailorScreen} />
       <Stack.Screen name="AppointmentCalendar" component={AppointmentCalendar} />
       <Stack.Screen name="TailorChatScreen" component={TailorChatScreen} />
+      <Stack.Screen name="TailorChatListScreen" component={TailorChatListScreen} />
       <Stack.Screen name="TailorTaskManager" component={TailorTaskManager} />
       <Stack.Screen name="TailorMeasurementBook" component={TailorMeasurementBook} />
-      <Stack.Screen name="CustomerMeasurementDetail" component={CustomerMeasurementDetail} />
       <Stack.Screen name="OrderManagement" component={OrderManagement} />
+      <Stack.Screen name="CustomerList" component={CustomerList} />
 
       {/* Shared */}
       <Stack.Screen name="ChatScreen" component={ChatScreen} />

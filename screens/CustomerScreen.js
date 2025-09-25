@@ -46,7 +46,7 @@ const CustomerScreen = ({ navigation }) => {
         <View style={styles.row}>
           <TouchableOpacity
             style={styles.card}
-            onPress={() => navigation.navigate('MeasurementBook')}
+            onPress={() => navigation.navigate('CustomerMeasurementDetail')}
           >
             <MaterialCommunityIcons name="tape-measure" size={30} color="#4e4e4e" />
             <Text style={styles.cardText}>My Measurements</Text>
@@ -104,6 +104,7 @@ const CustomerScreen = ({ navigation }) => {
           <MaterialCommunityIcons name="clipboard-list-outline" size={24} color="#333" />
           <Text style={styles.navText}>Orders</Text>
         </TouchableOpacity>
+
 
         <TouchableOpacity onPress={() => navigation.navigate('ProfileScreen')}>
           <Ionicons name="person-circle-outline" size={24} color="#333" />

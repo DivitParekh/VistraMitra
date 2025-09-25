@@ -15,16 +15,32 @@ import {
   updateDoc,
   where,
 } from 'firebase/firestore';
-import { db } from '../firebase/firebaseConfig';
+import { db, auth } from '../firebase/firebaseConfig';
+
+const TAILOR_UID = 'YvjGOga1CDWJhJfoxAvL7c7Z5sG2';
 
 const OrderManagement = () => {
   const [orders, setOrders] = useState([]);
   const [tasks, setTasks] = useState({});
   const [loading, setLoading] = useState(true);
 
-  // 🔹 Fetch ALL orders (tailor has access to everything)
   useEffect(() => {
-    const q = query(collection(db, 'orders'));
+    const user = auth.currentUser;
+    if (!user) {
+      console.warn("⚠️ No user logged in, skipping order fetch");
+      setLoading(false);
+      return;
+    }
+
+    let q;
+    if (user.uid === TAILOR_UID) {
+      // ✅ Tailor: fetch all global orders
+      q = query(collection(db, 'orders'));
+    } else {
+      // ✅ Customer: fetch only their subcollection
+      q = collection(db, 'users', user.uid, 'orders');
+    }
+
     const unsubscribe = onSnapshot(q, (snapshot) => {
       const orderData = snapshot.docs.map((doc) => ({
         id: doc.id,
@@ -33,35 +49,36 @@ const OrderManagement = () => {
       setOrders(orderData);
       setLoading(false);
 
-      // fetch tasks for each order
+      // Fetch tasks per order
       orderData.forEach((order) => {
-        const tq = query(
-          collection(db, 'taskManager'),
-          where('orderId', '==', order.id)
-        );
-        onSnapshot(tq, (taskSnap) => {
-          const taskData = taskSnap.docs.map((d) => ({
-            id: d.id,
-            ...d.data(),
-          }));
-          setTasks((prev) => ({ ...prev, [order.id]: taskData }));
-        });
-      });
+  if (auth.currentUser?.uid === TAILOR_UID || order.userId === auth.currentUser?.uid) {
+    const tq = query(
+      collection(db, 'taskManager'),
+      where('orderId', '==', order.id)
+    );
+    onSnapshot(tq, (taskSnap) => {
+      const taskData = taskSnap.docs.map((d) => ({
+        id: d.id,
+        ...d.data(),
+      }));
+      setTasks((prev) => ({ ...prev, [order.id]: taskData }));
+    });
+  }
+});
     });
 
     return () => unsubscribe();
   }, []);
 
-  // 🔹 Update Order Status
+  // 🔹 Update Order Status (tailor only)
   const updateOrderStatus = async (orderId, newStatus) => {
-    const orderRef = doc(db, 'orders', orderId);
-    await updateDoc(orderRef, { status: newStatus });
-  };
-
-  // 🔹 Update Task Status
-  const updateTaskStatus = async (taskId, newStatus) => {
-    const taskRef = doc(db, 'taskManager', taskId);
-    await updateDoc(taskRef, { status: newStatus });
+    try {
+      if (auth.currentUser?.uid !== TAILOR_UID) return; // customers blocked
+      const orderRef = doc(db, 'orders', orderId);
+      await updateDoc(orderRef, { status: newStatus });
+    } catch (err) {
+      console.error("Error updating order:", err);
+    }
   };
 
   // 🔹 Render Task
@@ -70,27 +87,7 @@ const OrderManagement = () => {
       <Text style={styles.taskText}>
         {task.stage || task.title} - {task.status}
       </Text>
-      <View style={styles.taskButtons}>
-        {['Pending', 'In Progress', 'Done'].map((status) => (
-          <TouchableOpacity
-            key={status}
-            style={[
-              styles.statusButton,
-              task.status === status && styles.activeButton,
-            ]}
-            onPress={() => updateTaskStatus(task.id, status)}
-          >
-            <Text
-              style={[
-                styles.statusText,
-                task.status === status && styles.activeText,
-              ]}
-            >
-              {status}
-            </Text>
-          </TouchableOpacity>
-        ))}
-      </View>
+      {/* Removed task update buttons for customers */}
     </View>
   );
 
@@ -105,32 +102,38 @@ const OrderManagement = () => {
         Status: <Text style={{ fontWeight: '600' }}>{item.status}</Text>
       </Text>
 
-      {/* Order Status Buttons */}
-      <View style={styles.buttonGroup}>
-        {['Confirmed', 'In Progress', 'Completed'].map((status) => (
-          <TouchableOpacity
-            key={status}
-            style={[
-              styles.statusButton,
-              item.status === status && styles.activeButton,
-            ]}
-            onPress={() => updateOrderStatus(item.id, status)}
-          >
-            <Text
+      {/* Tailor controls order status */}
+      {auth.currentUser?.uid === TAILOR_UID && (
+        <View style={styles.buttonGroup}>
+          {['Confirmed', 'In Progress', 'Completed'].map((status) => (
+            <TouchableOpacity
+              key={status}
               style={[
-                styles.statusText,
-                item.status === status && styles.activeText,
+                styles.statusButton,
+                item.status === status && styles.activeButton,
               ]}
+              onPress={() => updateOrderStatus(item.id, status)}
             >
-              {status}
-            </Text>
-          </TouchableOpacity>
-        ))}
-      </View>
+              <Text
+                style={[
+                  styles.statusText,
+                  item.status === status && styles.activeText,
+                ]}
+              >
+                {status}
+              </Text>
+            </TouchableOpacity>
+          ))}
+        </View>
+      )}
 
       {/* Render Tasks */}
       <Text style={styles.sectionTitle}>Tasks</Text>
-      {tasks[item.id]?.map((t) => renderTask(t))}
+      {tasks[item.id]?.length > 0 ? (
+        tasks[item.id].map((t) => renderTask(t))
+      ) : (
+        <Text style={{ color: '#777', fontSize: 13 }}>No tasks yet.</Text>
+      )}
     </View>
   );
 
@@ -203,8 +206,7 @@ const styles = StyleSheet.create({
     padding: 10,
     marginVertical: 4,
   },
-  taskText: { fontSize: 14, fontWeight: '500', marginBottom: 4 },
-  taskButtons: { flexDirection: 'row', justifyContent: 'space-around' },
+  taskText: { fontSize: 14, fontWeight: '500' },
 });
 
 export default OrderManagement;

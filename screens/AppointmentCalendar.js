@@ -7,6 +7,7 @@ import {
   TouchableOpacity,
   ActivityIndicator,
   Alert,
+  Image,
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { Calendar } from 'react-native-calendars';
@@ -59,55 +60,74 @@ const AppointmentCalendar = () => {
   };
 
   const updateStatus = async (id, newStatus, userId, appointment) => {
-  try {
-    let orderRef = null;
+    try {
+      let orderRef = null;
 
-    // 1. If confirmed → Create Order + Tasks
-    if (newStatus === 'Confirmed') {
-      orderRef = await addDoc(collection(db, 'orders'), {
-        userId: userId, // ✅ store customer UID for filtering
-        appointmentId: id,
-        customerName: appointment.fullName,
-        style: appointment.style || null,
-        fabric: appointment.fabric || null,
-        address: appointment.address,
-        date: appointment.date,
-        time: appointment.time,
-        status: 'Confirmed',
-        createdAt: serverTimestamp(),
-      });
-
-      // Auto-generate tasks
-      const stages = ['Cutting', 'Stitching', 'Handwork', 'Packaging'];
-      for (const stage of stages) {
-        await addDoc(collection(db, 'taskManager'), {
-          orderId: orderRef.id,
+      // ✅ If confirmed → Create Order + Tasks
+      if (newStatus === 'Confirmed') {
+        // 1. Create order in global collection
+        orderRef = await addDoc(collection(db, 'orders'), {
           userId: userId,
+          appointmentId: id,
           customerName: appointment.fullName,
-          stage,
-          status: 'Pending',
+          styleCategory: appointment.styleCategory || null,
+          styleImage: appointment.styleImage || null,
+          fabric: appointment.fabric || null,
+          address: appointment.address,
+          date: appointment.date,
+          time: appointment.time,
+          status: 'Confirmed',
           createdAt: serverTimestamp(),
         });
+
+        // 2. Mirror order inside customer's subcollection
+        await setDoc(doc(db, 'users', userId, 'orders', orderRef.id), {
+          orderId: orderRef.id,
+          appointmentId: id,
+          customerName: appointment.fullName,
+          styleCategory: appointment.styleCategory || null,
+          styleImage: appointment.styleImage || null,
+          fabric: appointment.fabric || null,
+          address: appointment.address,
+          date: appointment.date,
+          time: appointment.time,
+          status: 'Confirmed',
+          createdAt: serverTimestamp(),
+        });
+
+        // 3. Auto-generate tasks
+        const stages = ['Cutting', 'Stitching', 'Handwork', 'Packaging'];
+        for (const stage of stages) {
+          await addDoc(collection(db, 'taskManager'), {
+            orderId: orderRef.id,
+            userId: userId,
+            customerName: appointment.fullName,
+            stage,
+            status: 'Pending',
+            createdAt: serverTimestamp(),
+          });
+        }
       }
+
+      // ✅ Update appointment status in both collections
+      const updateData = {
+        ...appointment,
+        userId: userId,
+        status: newStatus,
+        ...(orderRef ? { orderId: orderRef.id } : {}),
+      };
+
+      await setDoc(doc(db, 'tailorAppointments', id), updateData, { merge: true });
+      await setDoc(doc(db, 'appointments', userId, 'userAppointments', id), updateData, {
+        merge: true,
+      });
+
+      Alert.alert('Success', `Appointment marked as ${newStatus}`);
+    } catch (err) {
+      console.error('Error updating status:', err);
+      Alert.alert('Error', 'Could not update appointment status');
     }
-
-    // 2. Merge status + orderId into existing appointment (don’t lose data)
-    const updateData = {
-      ...appointment, // keep old fields
-      status: newStatus,
-      ...(orderRef ? { orderId: orderRef.id } : {}),
-    };
-
-    await setDoc(doc(db, 'tailorAppointments', id), updateData, { merge: true });
-    await setDoc(doc(db, 'appointments', userId, 'userAppointments', id), updateData, { merge: true });
-
-    Alert.alert('Success', `Appointment marked as ${newStatus}`);
-  } catch (err) {
-    console.error('Error updating status:', err);
-    Alert.alert('Error', 'Could not update appointment status');
-  }
-};
-
+  };
 
   const filteredAppointments = selectedDate
     ? appointments.filter((app) => app.date === selectedDate)
@@ -173,7 +193,13 @@ const AppointmentCalendar = () => {
               <Text style={styles.cardText}>👤 {item.fullName}</Text>
               <Text style={styles.cardText}>📞 {item.phone}</Text>
               <Text style={styles.cardText}>📌 Fabric: {item.fabric || 'N/A'}</Text>
-              <Text style={styles.cardText}>🎨 Style: {item.style || 'N/A'}</Text>
+              <Text style={styles.cardText}>🎨 Style: {item.styleCategory || 'N/A'}</Text>
+              {item.styleImage && (
+                <Image
+                  source={{ uri: item.styleImage }}
+                  style={{ width: 80, height: 80, borderRadius: 6, marginVertical: 6 }}
+                />
+              )}
               <Text
                 style={[
                   styles.statusBadge,
@@ -182,7 +208,8 @@ const AppointmentCalendar = () => {
                     : item.status === 'Pending'
                     ? styles.pending
                     : styles.rejected,
-                ]}>
+                ]}
+              >
                 {item.status}
               </Text>
 
@@ -190,12 +217,14 @@ const AppointmentCalendar = () => {
                 <View style={styles.buttonRow}>
                   <TouchableOpacity
                     style={styles.confirmBtn}
-                    onPress={() => updateStatus(item.id, 'Confirmed', item.userId, item)}>
+                    onPress={() => updateStatus(item.id, 'Confirmed', item.userId, item)}
+                  >
                     <Text style={styles.btnText}>Confirm</Text>
                   </TouchableOpacity>
                   <TouchableOpacity
                     style={styles.declineBtn}
-                    onPress={() => updateStatus(item.id, 'Rejected', item.userId, item)}>
+                    onPress={() => updateStatus(item.id, 'Rejected', item.userId, item)}
+                  >
                     <Text style={styles.btnText}>Reject</Text>
                   </TouchableOpacity>
                 </View>

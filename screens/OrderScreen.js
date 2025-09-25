@@ -21,87 +21,127 @@ const OrderScreen = () => {
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
+    let taskUnsubscribers = [];
+    let unsubscribeOrders = null;
+
     const fetchOrders = async () => {
-      const uid = await AsyncStorage.getItem('userId'); // get logged in customer id
+      try {
+        const uid = await AsyncStorage.getItem('uid');
+        if (!uid) {
+          console.warn('⚠️ No user logged in, skipping order fetch');
+          setLoading(false);
+          return;
+        }
 
-      if (!uid) return;
+        // 1️⃣ Try to fetch from user subcollection first
+        const userOrdersRef = collection(db, 'users', uid, 'orders');
+        unsubscribeOrders = onSnapshot(userOrdersRef, (snapshot) => {
+          let orderData = snapshot.docs.map((doc) => ({
+            id: doc.id,
+            ...doc.data(),
+          }));
 
-      // 🔎 Only fetch orders for this customer
-      const q = query(collection(db, 'orders'), where('userId', '==', uid));
-      const unsubscribe = onSnapshot(q, (snapshot) => {
-        const orderData = snapshot.docs.map((doc) => ({
-          id: doc.id,
-          ...doc.data(),
-        }));
-        setOrders(orderData);
-        setLoading(false);
-
-        // fetch tasks for each order
-        orderData.forEach((order) => {
-          const tq = query(
-            collection(db, 'taskManager'),
-            where('orderId', '==', order.id)
-          );
-          onSnapshot(tq, (taskSnap) => {
-            const taskData = taskSnap.docs.map((d) => ({
-              id: d.id,
-              ...d.data(),
-            }));
-            setTasks((prev) => ({ ...prev, [order.id]: taskData }));
-          });
+          // 2️⃣ If empty → fallback to global orders
+          if (orderData.length === 0) {
+            const globalQ = query(
+              collection(db, 'orders'),
+              where('userId', '==', uid)
+            );
+            unsubscribeOrders = onSnapshot(globalQ, (globalSnap) => {
+              orderData = globalSnap.docs.map((doc) => ({
+                id: doc.id,
+                ...doc.data(),
+              }));
+              setOrders(orderData);
+              setLoading(false);
+              setupTaskListeners(orderData);
+            });
+          } else {
+            setOrders(orderData);
+            setLoading(false);
+            setupTaskListeners(orderData);
+          }
         });
-      });
+      } catch (err) {
+        console.error('Error fetching orders:', err);
+        setLoading(false);
+      }
+    };
 
-      return () => unsubscribe();
+    // helper to listen for tasks per order
+    const setupTaskListeners = (orderData) => {
+      // cleanup old listeners
+      taskUnsubscribers.forEach((fn) => fn && fn());
+      taskUnsubscribers = [];
+
+      orderData.forEach((order) => {
+        const tq = query(
+          collection(db, 'taskManager'),
+          where('orderId', '==', order.id)
+        );
+        const taskUnsub = onSnapshot(tq, (taskSnap) => {
+          const taskData = taskSnap.docs.map((d) => ({
+            id: d.id,
+            ...d.data(),
+          }));
+          setTasks((prev) => ({ ...prev, [order.id]: taskData }));
+        });
+        taskUnsubscribers.push(taskUnsub);
+      });
     };
 
     fetchOrders();
+
+    return () => {
+      if (unsubscribeOrders) unsubscribeOrders();
+      taskUnsubscribers.forEach((fn) => fn && fn());
+    };
   }, []);
 
   const renderTask = (task) => (
-  <View key={task.id} style={styles.taskCard}>
-    <Text style={styles.taskText}>
-      {task.stage || task.title} — <Text style={styles.taskStatus}>{task.status}</Text>
-    </Text>
-  </View>
-);
-
-const renderOrder = ({ item }) => (
-  <View style={styles.orderCard}>
-    <Text style={styles.title}>Order: {item.id}</Text>
-    <Text style={styles.subtext}>Style: {item.style || 'N/A'}</Text>
-    <Text style={styles.subtext}>Fabric: {item.fabric || 'Own Cloth'}</Text>
-    <Text style={styles.subtext}>
-      Status:{' '}
-      <Text
-        style={[
-          styles.statusBadge,
-          item.status === 'Confirmed'
-            ? styles.confirmed
-            : item.status === 'In Progress'
-            ? styles.inProgress
-            : item.status === 'Completed'
-            ? styles.completed
-            : styles.pending,
-        ]}
-      >
-        {item.status}
+    <View key={task.id} style={styles.taskCard}>
+      <Text style={styles.taskText}>
+        {task.stage || task.title} —{' '}
+        <Text style={styles.taskStatus}>{task.status}</Text>
       </Text>
-    </Text>
+    </View>
+  );
 
-    {/* Show tasks */}
-    {tasks[item.id]?.length > 0 ? (
-      <>
-        <Text style={styles.sectionTitle}>Tasks</Text>
-        {tasks[item.id].map((t) => renderTask(t))}
-      </>
-    ) : (
-      <Text style={{ marginTop: 8, color: '#777', fontSize: 13 }}>
-        No tasks assigned yet.
+  const renderOrder = ({ item }) => (
+    <View style={styles.orderCard}>
+      <Text style={styles.title}>Order: {item.id}</Text>
+      <Text style={styles.subtext}>Style: {item.style || 'N/A'}</Text>
+      <Text style={styles.subtext}>Fabric: {item.fabric || 'Own Cloth'}</Text>
+      <Text style={styles.subtext}>
+        Status:{' '}
+        <Text
+          style={[
+            styles.statusBadge,
+            item.status === 'Confirmed'
+              ? styles.confirmed
+              : item.status === 'In Progress'
+              ? styles.inProgress
+              : item.status === 'Completed'
+              ? styles.completed
+              : styles.pending,
+          ]}
+        >
+          {item.status}
+        </Text>
       </Text>
-    )}
-  </View>
-);
+
+      {tasks[item.id]?.length > 0 ? (
+        <>
+          <Text style={styles.sectionTitle}>Tasks</Text>
+          {tasks[item.id].map((t) => renderTask(t))}
+        </>
+      ) : (
+        <Text style={{ marginTop: 8, color: '#777', fontSize: 13 }}>
+          No tasks assigned yet.
+        </Text>
+      )}
+    </View>
+  );
 
   return (
     <View style={styles.container}>
@@ -161,7 +201,6 @@ const styles = StyleSheet.create({
   confirmed: { backgroundColor: '#d4edda', color: '#27ae60' },
   inProgress: { backgroundColor: '#cce5ff', color: '#007bff' },
   completed: { backgroundColor: '#d4edda', color: '#2c3e50' },
-
   taskCard: {
     backgroundColor: '#f8f8f8',
     borderRadius: 8,

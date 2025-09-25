@@ -58,7 +58,7 @@ const AppointmentScreen = () => {
   // 🔹 Fetch user's existing appointments
   useEffect(() => {
     const fetchAppointments = async () => {
-      const uid = await AsyncStorage.getItem('userId');
+      const uid = await AsyncStorage.getItem('uid'); 
       if (!uid) return;
       setUserId(uid);
       const q = query(collection(db, 'appointments', uid, 'userAppointments'));
