@@ -1,0 +1,72 @@
+{
+  "Blouse": {
+    "basePrice": 1200.0,
+    "tailorFabricExtra": 400.0,
+    "simpleAdd": 300.0,
+    "mediumAdd": 500.0,
+    "heavyAdd": 900.0
+  },
+  "Churidar": {
+    "basePrice": 2500.0,
+    "tailorFabricExtra": 700.0,
+    "simpleAdd": 400.0,
+    "mediumAdd": 600.0,
+    "heavyAdd": 1500.0
+  },
+  "Coatset": {
+    "basePrice": 1500.0,
+    "tailorFabricExtra": 400.0,
+    "simpleAdd": 300.0,
+    "mediumAdd": 500.0,
+    "heavyAdd": 700.0
+  },
+  "Dress": {
+    "basePrice": 3000.0,
+    "tailorFabricExtra": 900.0,
+    "simpleAdd": 300.0,
+    "mediumAdd": 500.0,
+    "heavyAdd": 700.0
+  },
+  "Kurti": {
+    "basePrice": 800.0,
+    "tailorFabricExtra": 400.0,
+    "simpleAdd": 200.0,
+    "mediumAdd": 500.0,
+    "heavyAdd": 700.0
+  },
+  "Lehenga": {
+    "basePrice": 10000.0,
+    "tailorFabricExtra": 9000.0,
+    "simpleAdd": 2000.0,
+    "mediumAdd": 4000.0,
+    "heavyAdd": 5000.0
+  },
+  "Palazzo": {
+    "basePrice": 1000.0,
+    "tailorFabricExtra": 500.0,
+    "simpleAdd": 200.0,
+    "mediumAdd": 400.0,
+    "heavyAdd": 800.0
+  },
+  "Punjabi": {
+    "basePrice": 1200.0,
+    "tailorFabricExtra": 600.0,
+    "simpleAdd": 300.0,
+    "mediumAdd": 600.0,
+    "heavyAdd": 900.0
+  },
+  "Saree": {
+    "basePrice": 5000.0,
+    "tailorFabricExtra": 2000.0,
+    "simpleAdd": 500.0,
+    "mediumAdd": 900.0,
+    "heavyAdd": 1500.0
+  },
+  "Sharara": {
+    "basePrice": 3000.0,
+    "tailorFabricExtra": 1500.0,
+    "simpleAdd": 300.0,
+    "mediumAdd": 600.0,
+    "heavyAdd": 1000.0
+  }
+}

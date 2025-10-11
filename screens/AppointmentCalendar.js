@@ -1,3 +1,4 @@
+// screens/AppointmentCalendar.js
 import React, { useEffect, useState } from 'react';
 import {
   View,
@@ -20,8 +21,9 @@ import {
   serverTimestamp,
 } from 'firebase/firestore';
 import { db } from '../firebase/firebaseConfig';
+import { sendNotification } from '../utils/notificationService';
 
-const AppointmentCalendar = () => {
+const AppointmentCalendar = ({ navigation }) => {
   const [appointments, setAppointments] = useState([]);
   const [selectedDate, setSelectedDate] = useState(null);
   const [loading, setLoading] = useState(true);
@@ -59,13 +61,14 @@ const AppointmentCalendar = () => {
     setMarkedDates(marks);
   };
 
+  // 🔹 Confirm or Reject Appointment
   const updateStatus = async (id, newStatus, userId, appointment) => {
     try {
       let orderRef = null;
 
-      // ✅ If confirmed → Create Order + Tasks
+      // ✅ Only create an order when Confirmed
       if (newStatus === 'Confirmed') {
-        // 1. Create order in global collection
+        // Create order for tailor
         orderRef = await addDoc(collection(db, 'orders'), {
           userId: userId,
           appointmentId: id,
@@ -76,11 +79,15 @@ const AppointmentCalendar = () => {
           address: appointment.address,
           date: appointment.date,
           time: appointment.time,
+          totalCost: appointment.totalCost || 0,
+          advancePaid: appointment.advancePaid || 0,
+          balanceDue: appointment.balanceDue || 0,
+          paymentStatus: appointment.paymentStatus || 'Pending',
           status: 'Confirmed',
           createdAt: serverTimestamp(),
         });
 
-        // 2. Mirror order inside customer's subcollection
+        // Create order in customer's orders subcollection
         await setDoc(doc(db, 'users', userId, 'orders', orderRef.id), {
           orderId: orderRef.id,
           appointmentId: id,
@@ -91,11 +98,15 @@ const AppointmentCalendar = () => {
           address: appointment.address,
           date: appointment.date,
           time: appointment.time,
+          totalCost: appointment.totalCost || 0,
+          advancePaid: appointment.advancePaid || 0,
+          balanceDue: appointment.balanceDue || 0,
+          paymentStatus: appointment.paymentStatus || 'Pending',
           status: 'Confirmed',
           createdAt: serverTimestamp(),
         });
 
-        // 3. Auto-generate tasks
+        // Generate default task stages
         const stages = ['Cutting', 'Stitching', 'Handwork', 'Packaging'];
         for (const stage of stages) {
           await addDoc(collection(db, 'taskManager'), {
@@ -109,7 +120,7 @@ const AppointmentCalendar = () => {
         }
       }
 
-      // ✅ Update appointment status in both collections
+      // ✅ Update appointment status globally
       const updateData = {
         ...appointment,
         userId: userId,
@@ -121,6 +132,15 @@ const AppointmentCalendar = () => {
       await setDoc(doc(db, 'appointments', userId, 'userAppointments', id), updateData, {
         merge: true,
       });
+
+      // 🔔 Send notification based on status
+      await sendNotification(
+        userId,
+        newStatus === 'Confirmed' ? 'Appointment Confirmed ✅' : 'Appointment Rejected ❌',
+        newStatus === 'Confirmed'
+          ? `Your appointment on ${appointment.date} at ${appointment.time} has been confirmed.`
+          : `Sorry, your appointment on ${appointment.date} at ${appointment.time} was rejected.`
+      );
 
       Alert.alert('Success', `Appointment marked as ${newStatus}`);
     } catch (err) {
@@ -200,6 +220,35 @@ const AppointmentCalendar = () => {
                   style={{ width: 80, height: 80, borderRadius: 6, marginVertical: 6 }}
                 />
               )}
+
+              {/* 💰 Payment Badge */}
+              <View
+                style={[
+                  styles.paymentBadge,
+                  item.paymentStatus === 'Advance Paid'
+                    ? styles.paid
+                    : item.paymentStatus === 'Full Paid'
+                    ? styles.fullPaid
+                    : styles.pendingPay,
+                ]}
+              >
+                <Ionicons
+                  name={
+                    item.paymentStatus === 'Advance Paid'
+                      ? 'cash-outline'
+                      : item.paymentStatus === 'Full Paid'
+                      ? 'checkmark-done'
+                      : 'alert-circle-outline'
+                  }
+                  size={14}
+                  color="#fff"
+                />
+                <Text style={styles.paymentText}>
+                  {item.paymentStatus || 'Pending Payment'}
+                </Text>
+              </View>
+
+              {/* 🟢 Status Badge */}
               <Text
                 style={[
                   styles.statusBadge,
@@ -213,6 +262,7 @@ const AppointmentCalendar = () => {
                 {item.status}
               </Text>
 
+              {/* 🔘 Confirm / Reject Buttons */}
               {item.status === 'Pending' && (
                 <View style={styles.buttonRow}>
                   <TouchableOpacity
@@ -228,6 +278,17 @@ const AppointmentCalendar = () => {
                     <Text style={styles.btnText}>Reject</Text>
                   </TouchableOpacity>
                 </View>
+              )}
+
+              {/* 💳 View Payment Button */}
+              {item.status === 'Confirmed' && (
+                <TouchableOpacity
+                  style={styles.paymentBtn}
+                  onPress={() => navigation.navigate('PaymentTailorScreen')}
+                >
+                  <Ionicons name="wallet-outline" size={16} color="#fff" />
+                  <Text style={styles.paymentBtnText}>View Payment</Text>
+                </TouchableOpacity>
               )}
             </View>
           ))}
@@ -247,11 +308,7 @@ const styles = StyleSheet.create({
     paddingBottom: 10,
   },
   headerTitle: { fontSize: 20, fontWeight: '700', color: '#2c3e50' },
-  appointmentsList: {
-    paddingHorizontal: 20,
-    paddingTop: 10,
-    paddingBottom: 80,
-  },
+  appointmentsList: { paddingHorizontal: 20, paddingTop: 10, paddingBottom: 80 },
   dateHeading: { fontSize: 16, fontWeight: '600', marginBottom: 16, color: '#2c3e50' },
   card: {
     backgroundColor: '#fff',
@@ -263,6 +320,19 @@ const styles = StyleSheet.create({
     borderLeftColor: '#5DA3FA',
   },
   cardText: { fontSize: 14, color: '#34495e', marginBottom: 6 },
+  paymentBadge: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    alignSelf: 'flex-start',
+    paddingHorizontal: 10,
+    paddingVertical: 4,
+    borderRadius: 12,
+    marginTop: 4,
+  },
+  paymentText: { color: '#fff', fontSize: 12, fontWeight: '600', marginLeft: 5 },
+  paid: { backgroundColor: '#27ae60' },
+  fullPaid: { backgroundColor: '#2ecc71' },
+  pendingPay: { backgroundColor: '#f39c12' },
   statusBadge: {
     fontWeight: 'bold',
     paddingHorizontal: 8,
@@ -291,6 +361,16 @@ const styles = StyleSheet.create({
     alignItems: 'center',
   },
   btnText: { color: '#fff', fontWeight: '600' },
+  paymentBtn: {
+    backgroundColor: '#007bff',
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    paddingVertical: 8,
+    borderRadius: 8,
+    marginTop: 10,
+  },
+  paymentBtnText: { color: '#fff', marginLeft: 6, fontWeight: '600' },
   loadingContainer: { flex: 1, justifyContent: 'center', alignItems: 'center' },
 });
 

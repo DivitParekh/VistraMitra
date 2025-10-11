@@ -6,6 +6,7 @@ import AsyncStorage from '@react-native-async-storage/async-storage';
 import OnboardingScreen from '../screens/OnboardingScreen';
 import LoginScreen from '../screens/LoginScreen';
 import SignupScreen from '../screens/SignupScreen';
+import NotificationsScreen from '../screens/NotificationScreen';
 
 import CustomerScreen from '../screens/CustomerScreen';
 import AppointmentScreen from '../screens/AppointmentScreen';
@@ -13,6 +14,7 @@ import CatalogScreen from '../screens/CatalogScreen';
 import CategoryStylesScreen from '../screens/CategoryStylesScreen';
 import SavedStylesScreen from '../screens/SavedStylesScreen';
 import OrderScreen from '../screens/OrderScreen';
+import CostEstimator from '../screens/CostEstimator';
 
 import TailorScreen from '../screens/TailorScreen';
 import AppointmentCalendar from '../screens/AppointmentCalendar';
@@ -25,6 +27,9 @@ import CustomerList from '../screens/CustomerList';
 import CustomerMeasurmentDetail from '../screens/CustomerMeasurementDetail';
 import ChatScreen from '../screens/ChatScreen';
 import ProfileScreen from '../screens/ProfileScreen';
+import PaymentScreen from '../screens/PaymentScreen';
+import PaymentTailorScreen from '../screens/PaymentTailorScreen';
+import FinalPaymentScreen from '../screens/FinalPaymentScreen';
 
 const Stack = createNativeStackNavigator();
 
@@ -77,6 +82,7 @@ const AppNavigator = ({ showOnboarding }) => {
       <Stack.Screen name="SavedStyles" component={SavedStylesScreen} />
       <Stack.Screen name="CustomerMeasurementDetail" component={CustomerMeasurmentDetail} />
       <Stack.Screen name="OrderScreen" component={OrderScreen} />
+      <Stack.Screen name="CostEstimator" component={CostEstimator} />
 
       {/* Tailor */}
       <Stack.Screen name="TailorScreen" component={TailorScreen} />
@@ -91,6 +97,11 @@ const AppNavigator = ({ showOnboarding }) => {
       {/* Shared */}
       <Stack.Screen name="ChatScreen" component={ChatScreen} />
       <Stack.Screen name="ProfileScreen" component={ProfileScreen} />
+      <Stack.Screen name="Notifications" component={NotificationsScreen} />
+      <Stack.Screen name="PaymentScreen" component={PaymentScreen} />
+      <Stack.Screen name="PaymentTailorScreen" component={PaymentTailorScreen} />
+      <Stack.Screen name="FinalPaymentScreen" component={FinalPaymentScreen} />
+
     </Stack.Navigator>
   );
 };

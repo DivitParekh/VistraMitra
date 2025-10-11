@@ -3,6 +3,7 @@ import { View, Text, TextInput, TouchableOpacity, StyleSheet, ScrollView, Alert 
 import { db, auth } from "../firebase/firebaseConfig";
 import { collection, doc, setDoc, getDocs } from "firebase/firestore";
 import { Picker } from "@react-native-picker/picker"; // ✅ FIXED
+import { SafeAreaView } from 'react-native-safe-area-context';
 
 const measurementFields = {
   Kurti: ["Chest", "Waist", "Hip", "Length"],

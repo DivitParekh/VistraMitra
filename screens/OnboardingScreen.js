@@ -2,6 +2,8 @@ import React from 'react';
 import Onboarding from 'react-native-onboarding-swiper';
 import { Image, StyleSheet, View } from 'react-native';
 
+
+
 const OnboardingScreen = ({ navigation }) => {
   // Reusable render function for image (without logo)
   const renderImage = (source) => (

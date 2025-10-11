@@ -1,3 +1,4 @@
+// screens/OrderScreen.js
 import React, { useEffect, useState } from 'react';
 import {
   View,
@@ -33,34 +34,17 @@ const OrderScreen = () => {
           return;
         }
 
-        // 1️⃣ Try to fetch from user subcollection first
+        // ✅ Always fetch from user’s subcollection
         const userOrdersRef = collection(db, 'users', uid, 'orders');
         unsubscribeOrders = onSnapshot(userOrdersRef, (snapshot) => {
-          let orderData = snapshot.docs.map((doc) => ({
+          const orderData = snapshot.docs.map((doc) => ({
             id: doc.id,
             ...doc.data(),
           }));
 
-          // 2️⃣ If empty → fallback to global orders
-          if (orderData.length === 0) {
-            const globalQ = query(
-              collection(db, 'orders'),
-              where('userId', '==', uid)
-            );
-            unsubscribeOrders = onSnapshot(globalQ, (globalSnap) => {
-              orderData = globalSnap.docs.map((doc) => ({
-                id: doc.id,
-                ...doc.data(),
-              }));
-              setOrders(orderData);
-              setLoading(false);
-              setupTaskListeners(orderData);
-            });
-          } else {
-            setOrders(orderData);
-            setLoading(false);
-            setupTaskListeners(orderData);
-          }
+          setOrders(orderData);
+          setLoading(false);
+          setupTaskListeners(orderData, uid);
         });
       } catch (err) {
         console.error('Error fetching orders:', err);
@@ -69,7 +53,7 @@ const OrderScreen = () => {
     };
 
     // helper to listen for tasks per order
-    const setupTaskListeners = (orderData) => {
+    const setupTaskListeners = (orderData, uid) => {
       // cleanup old listeners
       taskUnsubscribers.forEach((fn) => fn && fn());
       taskUnsubscribers = [];
@@ -77,8 +61,10 @@ const OrderScreen = () => {
       orderData.forEach((order) => {
         const tq = query(
           collection(db, 'taskManager'),
-          where('orderId', '==', order.id)
+          where('orderId', '==', order.id),
+          where('userId', '==', uid) // ✅ Customers only see their own tasks
         );
+
         const taskUnsub = onSnapshot(tq, (taskSnap) => {
           const taskData = taskSnap.docs.map((d) => ({
             id: d.id,

@@ -10,7 +10,6 @@ import {
   TextInput,
   Image,
   LayoutAnimation,
-  UIManager,
 } from 'react-native';
 import DateTimePicker from '@react-native-community/datetimepicker';
 import { Ionicons } from '@expo/vector-icons';
@@ -19,28 +18,28 @@ import { db } from '../firebase/firebaseConfig';
 import {
   collection,
   doc,
-  setDoc,
   getDocs,
   query,
-  serverTimestamp,
 } from 'firebase/firestore';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 
-// 🔹 Import local catalog (with categories & images)
+// 🔹 Catalog with complexity info
 import { catalog } from '../assets/catalogData';
 
-// ✅ Enable smooth animations on Android
-if (Platform.OS === 'android' && UIManager.setLayoutAnimationEnabledExperimental) {
-  UIManager.setLayoutAnimationEnabledExperimental(true);
-}
+// 🔔 Notifications
+import { sendNotification } from '../utils/notificationService';
 
-const AppointmentScreen = () => {
+// 💰 Cost Estimator
+import CostEstimator from '../screens/CostEstimator';
+
+const AppointmentScreen = ({ navigation }) => {
   const [appointments, setAppointments] = useState([]);
   const [expandedId, setExpandedId] = useState(null);
 
   const [selectedCategory, setSelectedCategory] = useState(null);
   const [selectedStyle, setSelectedStyle] = useState(null);
   const [fabricOption, setFabricOption] = useState('Own Fabric');
+  const [complexity, setComplexity] = useState('Simple'); // auto-detected
 
   const [selectedDate, setSelectedDate] = useState(new Date());
   const [selectedTime, setSelectedTime] = useState(null);
@@ -55,15 +54,22 @@ const AppointmentScreen = () => {
   const [address, setAddress] = useState('');
   const [note, setNote] = useState('');
 
+  // 💰 Cost Estimate state
+  const [estimatedCost, setEstimatedCost] = useState({
+    totalCost: 0,
+    advance: 0,
+    balance: 0,
+  });
+
   // 🔹 Fetch user's existing appointments
   useEffect(() => {
     const fetchAppointments = async () => {
-      const uid = await AsyncStorage.getItem('uid'); 
+      const uid = await AsyncStorage.getItem('uid');
       if (!uid) return;
       setUserId(uid);
       const q = query(collection(db, 'appointments', uid, 'userAppointments'));
       const snapshot = await getDocs(q);
-      const data = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
+      const data = snapshot.docs.map((doc) => ({ id: doc.id, ...doc.data() }));
       setAppointments(data);
     };
     fetchAppointments();
@@ -90,6 +96,8 @@ const AppointmentScreen = () => {
     setFabricOption('Own Fabric');
     setSelectedCategory(null);
     setSelectedStyle(null);
+    setComplexity('Simple');
+    setEstimatedCost({ totalCost: 0, advance: 0, balance: 0 });
   };
 
   const handleBookAppointment = async () => {
@@ -98,8 +106,8 @@ const AppointmentScreen = () => {
     }
     if (!userId) return Alert.alert('User not logged in');
 
-    const newApp = {
-      userId,
+    // 🔹 Redirect to payment first (appointment created after success)
+    const appointmentDetails = {
       fullName: name,
       phone,
       email,
@@ -110,26 +118,18 @@ const AppointmentScreen = () => {
       type: visitType,
       fabric: fabricOption,
       styleCategory: selectedCategory,
-      styleImage: selectedStyle.uri || null, // ✅ store URI string if available
-      status: 'Pending',
-      createdAt: serverTimestamp(),
+      styleImage: selectedStyle?.uri || null,
+      complexity,
+      status: 'Pending Payment',
     };
 
-    try {
-      const userAppointmentsRef = collection(db, 'appointments', userId, 'userAppointments');
-      const userAppDoc = doc(userAppointmentsRef);
-      await setDoc(userAppDoc, newApp);
+    navigation.navigate('PaymentScreen', {
+      totalCost: estimatedCost.totalCost,
+      userId,
+      appointmentDetails,
+    });
 
-      const tailorAppointmentsRef = doc(collection(db, 'tailorAppointments'), userAppDoc.id);
-      await setDoc(tailorAppointmentsRef, newApp);
-
-      setAppointments([...appointments, { ...newApp, id: userAppDoc.id }]);
-      resetForm();
-      Alert.alert('Success', 'Appointment booked!');
-    } catch (err) {
-      console.error('Booking Error:', err);
-      Alert.alert('Error', 'Something went wrong while booking');
-    }
+    resetForm();
   };
 
   const toggleExpand = (id) => {
@@ -144,7 +144,6 @@ const AppointmentScreen = () => {
         <Ionicons name="calendar-outline" size={24} color="#2c3e50" />
       </View>
 
-      {/* Existing Appointments */}
       {appointments.length === 0 ? (
         <Text style={styles.noAppointment}>No appointments booked yet.</Text>
       ) : (
@@ -157,7 +156,6 @@ const AppointmentScreen = () => {
               onPress={() => toggleExpand(item.id)}
               activeOpacity={0.8}
             >
-              {/* Summary */}
               <View style={{ flexDirection: 'row', justifyContent: 'space-between' }}>
                 <View>
                   <Text style={styles.appointmentText}>
@@ -165,33 +163,28 @@ const AppointmentScreen = () => {
                   </Text>
                   <Text style={{ fontSize: 13, color: '#555' }}>{item.fullName}</Text>
                 </View>
-                <View style={[
-                  styles.statusBadge,
-                  item.status === 'Confirmed' ? styles.statusConfirmed :
-                    item.status === 'Rejected' ? styles.statusRejected :
-                      styles.statusPending
-                ]}>
+                <View
+                  style={[
+                    styles.statusBadge,
+                    item.status === 'Confirmed'
+                      ? styles.statusConfirmed
+                      : item.status === 'Rejected'
+                      ? styles.statusRejected
+                      : styles.statusPending,
+                  ]}
+                >
                   <Text style={styles.statusText}>{item.status}</Text>
                 </View>
               </View>
 
-              {/* Expanded details */}
               {expandedId === item.id && (
                 <View style={{ marginTop: 10 }}>
                   <Text style={{ color: '#777', fontSize: 12 }}>Fabric: {item.fabric}</Text>
                   <Text style={{ color: '#777', fontSize: 12 }}>Style: {item.styleCategory}</Text>
-                  {item.styleImage && (
-                    <Image
-                      source={{ uri: item.styleImage }}
-                      style={{ width: 80, height: 80, borderRadius: 6, marginVertical: 6 }}
-                    />
-                  )}
-                  {item.note ? (
-                    <Text style={{ fontSize: 12, color: '#666' }}>📝 {item.note}</Text>
-                  ) : null}
-                  <Text style={{ fontSize: 12, color: '#666' }}>📧 {item.email}</Text>
-                  <Text style={{ fontSize: 12, color: '#666' }}>📞 {item.phone}</Text>
-                  <Text style={{ fontSize: 12, color: '#666' }}>🏠 {item.address}</Text>
+                  <Text style={{ color: '#777', fontSize: 12 }}>Complexity: {item.complexity}</Text>
+                  <Text style={{ color: '#777', fontSize: 12 }}>💰 Total: ₹{item.totalCost}</Text>
+                  <Text style={{ color: '#777', fontSize: 12 }}>Advance: ₹{item.advancePaid}</Text>
+                  <Text style={{ color: '#777', fontSize: 12 }}>Balance: ₹{item.balanceDue}</Text>
                 </View>
               )}
             </TouchableOpacity>
@@ -201,25 +194,46 @@ const AppointmentScreen = () => {
 
       {/* Booking Form */}
       <View style={styles.form}>
+        {/* Basic Info */}
         <Text style={styles.label}>Your Full Name</Text>
         <TextInput style={styles.input} value={name} onChangeText={setName} placeholder="John Doe" />
-        <Text style={styles.label}>Phone Number</Text>
-        <TextInput style={styles.input} value={phone} onChangeText={setPhone} keyboardType="phone-pad" placeholder="+91 98765 43210" />
-        <Text style={styles.label}>Email Address</Text>
-        <TextInput style={styles.input} value={email} onChangeText={setEmail} keyboardType="email-address" placeholder="you@example.com" />
-        <Text style={styles.label}>Address</Text>
-        <TextInput style={styles.input} value={address} onChangeText={setAddress} placeholder="123, Street Name, City" />
 
-        {/* Fabric Option */}
+        <Text style={styles.label}>Phone Number</Text>
+        <TextInput
+          style={styles.input}
+          value={phone}
+          onChangeText={setPhone}
+          keyboardType="phone-pad"
+          placeholder="+91 98765 43210"
+        />
+
+        <Text style={styles.label}>Email Address</Text>
+        <TextInput
+          style={styles.input}
+          value={email}
+          onChangeText={setEmail}
+          keyboardType="email-address"
+          placeholder="you@example.com"
+        />
+
+        <Text style={styles.label}>Address</Text>
+        <TextInput
+          style={styles.input}
+          value={address}
+          onChangeText={setAddress}
+          placeholder="123, Street Name, City"
+        />
+
+        {/* Fabric */}
         <Text style={styles.label}>Fabric Option</Text>
         <View style={styles.pickerContainer}>
-          <Picker selectedValue={fabricOption} onValueChange={(value) => setFabricOption(value)} style={styles.picker}>
+          <Picker selectedValue={fabricOption} onValueChange={(v) => setFabricOption(v)} style={styles.picker}>
             <Picker.Item label="Own Fabric" value="Own Fabric" />
             <Picker.Item label="Tailor's Fabric" value="Tailor's Fabric" />
           </Picker>
         </View>
 
-        {/* Catalog Category Picker */}
+        {/* Catalog */}
         <Text style={styles.label}>Select Category</Text>
         <View style={styles.pickerContainer}>
           <Picker
@@ -227,6 +241,7 @@ const AppointmentScreen = () => {
             onValueChange={(value) => {
               setSelectedCategory(value);
               setSelectedStyle(null);
+              setComplexity('Simple');
             }}
             style={styles.picker}
           >
@@ -237,21 +252,23 @@ const AppointmentScreen = () => {
           </Picker>
         </View>
 
-        {/* Style Selection */}
         {selectedCategory && (
           <>
             <Text style={styles.label}>Choose Style</Text>
             <ScrollView horizontal showsHorizontalScrollIndicator={false} style={{ marginBottom: 16 }}>
-              {catalog[selectedCategory].map((img, idx) => (
+              {catalog[selectedCategory].map((item, idx) => (
                 <TouchableOpacity
                   key={idx}
-                  onPress={() => setSelectedStyle({ uri: Image.resolveAssetSource(img).uri })}
+                  onPress={() => {
+                    setSelectedStyle({ uri: Image.resolveAssetSource(item.image).uri });
+                    setComplexity(item.complexity);
+                  }}
                   style={[
                     styles.imageOption,
-                    selectedStyle?.uri === Image.resolveAssetSource(img).uri && styles.imageSelected
+                    selectedStyle?.uri === Image.resolveAssetSource(item.image).uri && styles.imageSelected,
                   ]}
                 >
-                  <Image source={img} style={{ width: 80, height: 80, borderRadius: 8 }} />
+                  <Image source={item.image} style={{ width: 80, height: 80, borderRadius: 8 }} />
                 </TouchableOpacity>
               ))}
             </ScrollView>
@@ -292,7 +309,7 @@ const AppointmentScreen = () => {
           />
         )}
 
-        {/* Notes */}
+        {/* Note */}
         <Text style={styles.label}>Special Note</Text>
         <TextInput
           style={[styles.input, { height: 80 }]}
@@ -302,7 +319,14 @@ const AppointmentScreen = () => {
           placeholder="e.g. Looking for a slim-fit navy suit..."
         />
 
-        {/* Submit */}
+        {/* 💰 Cost Estimator */}
+        <CostEstimator
+          fabricOption={fabricOption}
+          styleCategory={selectedCategory}
+          complexity={complexity}
+          onEstimate={setEstimatedCost}
+        />
+
         <TouchableOpacity style={styles.bookBtn} onPress={handleBookAppointment}>
           <Text style={styles.bookBtnText}>Submit Appointment Request</Text>
         </TouchableOpacity>

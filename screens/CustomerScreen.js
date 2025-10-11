@@ -1,10 +1,9 @@
-import React from 'react';
+import React, { useEffect, useState } from 'react';
 import {
   View,
   Text,
   StyleSheet,
   TouchableOpacity,
-  SafeAreaView,
   ScrollView,
 } from 'react-native';
 import {
@@ -12,8 +11,29 @@ import {
   MaterialCommunityIcons,
   FontAwesome5,
 } from '@expo/vector-icons';
+import { collection, query, where, onSnapshot } from 'firebase/firestore';
+import { SafeAreaView } from 'react-native-safe-area-context';
+import { db, auth } from '../firebase/firebaseConfig';
 
 const CustomerScreen = ({ navigation }) => {
+  const [unreadCount, setUnreadCount] = useState(0);
+
+  // 🔹 Subscribe to unread notifications
+  useEffect(() => {
+    if (!auth.currentUser) return;
+
+    const q = query(
+      collection(db, 'notifications', auth.currentUser.uid, 'userNotifications'),
+      where('read', '==', false)
+    );
+
+    const unsubscribe = onSnapshot(q, (snapshot) => {
+      setUnreadCount(snapshot.size);
+    });
+
+    return () => unsubscribe();
+  }, []);
+
   return (
     <SafeAreaView style={styles.container}>
       {/* Header */}
@@ -21,12 +41,20 @@ const CustomerScreen = ({ navigation }) => {
         <Text style={styles.header}>VastraMitra</Text>
         <Text style={styles.subheader}>Your Fashion Assistant</Text>
 
-        {/* Notification Icon */}
         <TouchableOpacity
           style={styles.notificationIcon}
           onPress={() => navigation.navigate('Notifications')}
         >
           <Ionicons name="notifications-outline" size={22} color="#2c3e50" />
+
+          {/* 🔴 Badge for unread notifications */}
+          {unreadCount > 0 && (
+            <View style={styles.badge}>
+              <Text style={styles.badgeText}>
+                {unreadCount > 9 ? '9+' : unreadCount}
+              </Text>
+            </View>
+          )}
         </TouchableOpacity>
       </View>
 
@@ -104,7 +132,6 @@ const CustomerScreen = ({ navigation }) => {
           <MaterialCommunityIcons name="clipboard-list-outline" size={24} color="#333" />
           <Text style={styles.navText}>Orders</Text>
         </TouchableOpacity>
-
 
         <TouchableOpacity onPress={() => navigation.navigate('ProfileScreen')}>
           <Ionicons name="person-circle-outline" size={24} color="#333" />
@@ -213,6 +240,23 @@ const styles = StyleSheet.create({
     color: '#333',
     textAlign: 'center',
     marginTop: 4,
+  },
+  badge: {
+    position: 'absolute',
+    top: -2,
+    right: -2,
+    backgroundColor: 'red',
+    borderRadius: 10,
+    paddingHorizontal: 5,
+    paddingVertical: 1,
+    minWidth: 18,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  badgeText: {
+    color: '#fff',
+    fontSize: 10,
+    fontWeight: 'bold',
   },
 });
 

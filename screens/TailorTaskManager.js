@@ -22,6 +22,8 @@ import {
 import { db, auth } from '../firebase/firebaseConfig';
 import { Ionicons } from '@expo/vector-icons';
 import { Picker } from '@react-native-picker/picker';
+import { SafeAreaView } from 'react-native-safe-area-context';
+
 
 const TAILOR_UID = 'YvjGOga1CDWJhJfoxAvL7c7Z5sG2';
 

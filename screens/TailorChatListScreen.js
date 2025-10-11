@@ -6,6 +6,7 @@ import { useNavigation } from '@react-navigation/native';
 import { collection, onSnapshot, doc, getDoc } from 'firebase/firestore';
 import { db } from '../firebase/firebaseConfig';
 
+
 const TailorChatListScreen = () => {
   const [chats, setChats] = useState([]);
   const [loading, setLoading] = useState(true);

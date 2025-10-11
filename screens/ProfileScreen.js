@@ -12,6 +12,7 @@ import { Ionicons } from '@expo/vector-icons';
 import { signOut } from 'firebase/auth';
 import { auth } from '../firebase/firebaseConfig';
 
+
 /**
  * ProfileScreen
  * - Reads role/name/email from AsyncStorage

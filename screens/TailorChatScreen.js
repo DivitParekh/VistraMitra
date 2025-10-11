@@ -22,6 +22,7 @@ import {
   setDoc,
   serverTimestamp
 } from 'firebase/firestore';
+import { SafeAreaView } from 'react-native-safe-area-context';
 import { db } from '../firebase/firebaseConfig';
 import { Ionicons } from '@expo/vector-icons';
 
