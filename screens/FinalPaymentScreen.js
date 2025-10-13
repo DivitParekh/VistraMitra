@@ -6,7 +6,7 @@ import {
   TouchableOpacity,
   Alert,
   Linking,
-  Platform,
+  ActivityIndicator,
 } from "react-native";
 import { Ionicons } from "@expo/vector-icons";
 import { db } from "../firebase/firebaseConfig";
@@ -14,34 +14,48 @@ import { doc, updateDoc, getDoc } from "firebase/firestore";
 import QRCode from "react-native-qrcode-svg";
 import { sendNotification } from "../utils/notificationService";
 
-const UPI_ID = "jethvaakshat3@oksbi"; // ✅ tailor's verified UPI
+const UPI_ID = "jethvaakshat3@oksbi"; // ✅ tailor UPI
 const NAME = "Akshat Jethva"; // ✅ tailor name
 
 const FinalPaymentScreen = ({ route, navigation }) => {
-  // 🧾 Either comes from route or deep link
-  const [appointmentId, setAppointmentId] = useState(
-    route?.params?.appointmentId || null
-  );
+  const [appointmentId, setAppointmentId] = useState(route?.params?.appointmentId || null);
   const [userId, setUserId] = useState(route?.params?.userId || null);
-  const [totalCost, setTotalCost] = useState(route?.params?.totalCost || 0);
-  const [advancePaid, setAdvancePaid] = useState(route?.params?.advancePaid || 0);
+  const [totalCost, setTotalCost] = useState(Number(route?.params?.totalCost) || 0);
+  const [advancePaid, setAdvancePaid] = useState(Number(route?.params?.advancePaid) || 0);
   const [balanceAmount, setBalanceAmount] = useState(0);
   const [showQR, setShowQR] = useState(false);
+  const [loading, setLoading] = useState(true);
 
-  // 🔹 Listen to deep links from notification
+  // 🧭 Deep link listener (for notifications)
   useEffect(() => {
     const subscription = Linking.addEventListener("url", handleDeepLink);
     checkInitialUrl();
     return () => subscription.remove();
   }, []);
 
-  // When app opens from background via link
   const checkInitialUrl = async () => {
     const initialUrl = await Linking.getInitialURL();
     if (initialUrl) handleDeepLink({ url: initialUrl });
+    else fetchLatestData(); // 👈 fallback fetch if no deep link
   };
 
-  // 🔹 Handle notification tap (deep link)
+  // 🔹 Fetch appointment from Firestore if params are missing
+  const fetchLatestData = async () => {
+    try {
+      if (!appointmentId || !userId) return;
+      const appRef = doc(db, "appointments", userId, "userAppointments", appointmentId);
+      const snap = await getDoc(appRef);
+      if (snap.exists()) {
+        const data = snap.data();
+        setTotalCost(Number(data.totalCost) || 0);
+        setAdvancePaid(Number(data.advancePaid) || 0);
+      }
+    } catch (err) {
+      console.error("Error fetching appointment:", err);
+    }
+  };
+
+  // 🔗 Handle deep link
   const handleDeepLink = async ({ url }) => {
     try {
       if (url.includes("vastramitra://finalpayment")) {
@@ -52,14 +66,12 @@ const FinalPaymentScreen = ({ route, navigation }) => {
         if (appId && uid) {
           setAppointmentId(appId);
           setUserId(uid);
-
           const appRef = doc(db, "appointments", uid, "userAppointments", appId);
           const snap = await getDoc(appRef);
           if (snap.exists()) {
             const data = snap.data();
-            setTotalCost(data.totalCost);
-            setAdvancePaid(data.advancePaid);
-            setBalanceAmount(data.totalCost - data.advancePaid);
+            setTotalCost(Number(data.totalCost) || 0);
+            setAdvancePaid(Number(data.advancePaid) || 0);
           }
         }
       }
@@ -68,10 +80,11 @@ const FinalPaymentScreen = ({ route, navigation }) => {
     }
   };
 
+  // 🧮 Calculate balance dynamically
   useEffect(() => {
-    if (totalCost && advancePaid) {
-      setBalanceAmount(totalCost - advancePaid);
-    }
+    const remaining = (Number(totalCost) || 0) - (Number(advancePaid) || 0);
+    setBalanceAmount(remaining > 0 ? remaining : 0);
+    setLoading(false);
   }, [totalCost, advancePaid]);
 
   const upiUrl = `upi://pay?pa=${UPI_ID}&pn=${encodeURIComponent(
@@ -83,25 +96,22 @@ const FinalPaymentScreen = ({ route, navigation }) => {
       const supported = await Linking.canOpenURL(upiUrl);
       if (!supported) {
         Alert.alert("No UPI App Found", "Please scan the QR below to complete payment.");
+        setShowQR(true);
         return;
       }
 
       await Linking.openURL(upiUrl);
-
-      Alert.alert(
-        "Confirm Payment",
-        "After completing payment, tap Confirm below.",
-        [
-          { text: "Cancel", style: "cancel" },
-          { text: "Confirm", onPress: () => confirmFinalPayment() },
-        ]
-      );
+      Alert.alert("Confirm Payment", "After completing payment, tap Confirm below.", [
+        { text: "Cancel", style: "cancel" },
+        { text: "Confirm", onPress: () => confirmFinalPayment() },
+      ]);
     } catch (error) {
       console.error("Payment error:", error);
       Alert.alert("Error", "Unable to open UPI app.");
     }
   };
 
+  // ✅ Confirm and update Firestore
   const confirmFinalPayment = async () => {
     try {
       if (!appointmentId || !userId) {
@@ -135,6 +145,15 @@ const FinalPaymentScreen = ({ route, navigation }) => {
     }
   };
 
+  if (loading) {
+    return (
+      <View style={styles.center}>
+        <ActivityIndicator size="large" color="#007bff" />
+        <Text style={{ marginTop: 8 }}>Fetching payment info...</Text>
+      </View>
+    );
+  }
+
   return (
     <View style={styles.container}>
       <Text style={styles.header}>Final Payment</Text>
@@ -163,19 +182,36 @@ const FinalPaymentScreen = ({ route, navigation }) => {
             </View>
           )}
 
-          <TouchableOpacity style={styles.cancelBtn} onPress={() => navigation.goBack()}>
-            <Text style={styles.cancelText}>Cancel</Text>
+          <TouchableOpacity
+            style={styles.confirmBtn}
+            onPress={() =>
+              Alert.alert(
+                "Confirm Payment",
+                "Have you received payment successfully?",
+                [
+                  { text: "Cancel" },
+                  { text: "Yes", onPress: confirmFinalPayment },
+                ]
+              )
+            }
+          >
+            <Text style={styles.confirmText}>✅ Confirm Payment Received</Text>
           </TouchableOpacity>
         </>
       ) : (
         <Text style={styles.text}>✅ No pending payment. Thank you!</Text>
       )}
+
+      <TouchableOpacity style={styles.cancelBtn} onPress={() => navigation.goBack()}>
+        <Text style={styles.cancelText}>← Back</Text>
+      </TouchableOpacity>
     </View>
   );
 };
 
 const styles = StyleSheet.create({
-  container: { flex: 1, alignItems: "center", justifyContent: "center", backgroundColor: "#f8f9fa" },
+  container: { flex: 1, alignItems: "center", justifyContent: "center", backgroundColor: "#f8f9fa", padding: 20 },
+  center: { flex: 1, justifyContent: "center", alignItems: "center" },
   header: { fontSize: 22, fontWeight: "700", marginBottom: 20, color: "#2c3e50" },
   text: { fontSize: 16, color: "#333", marginBottom: 10 },
   payBtn: {
@@ -203,7 +239,15 @@ const styles = StyleSheet.create({
     elevation: 2,
   },
   note: { color: "#555", marginTop: 10 },
-  cancelBtn: { marginTop: 20 },
+  confirmBtn: {
+    marginTop: 20,
+    backgroundColor: "#27ae60",
+    paddingVertical: 10,
+    paddingHorizontal: 20,
+    borderRadius: 10,
+  },
+  confirmText: { color: "#fff", fontWeight: "700" },
+  cancelBtn: { marginTop: 30 },
   cancelText: { color: "#777" },
 });
 

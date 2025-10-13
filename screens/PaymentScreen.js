@@ -14,8 +14,8 @@ import { db } from "../firebase/firebaseConfig";
 import { doc, setDoc, collection, serverTimestamp } from "firebase/firestore";
 import { sendNotification } from "../utils/notificationService";
 
-const UPI_ID = "jethvaakshat3@oksbi"; // 🔹 your actual UPI ID
-const NAME = "Akshat Jethva"; // 🔹 your UPI display name
+const UPI_ID = "jethvaakshat3@oksbi";
+const NAME = "Akshat Jethva";
 
 const PaymentScreen = ({ route, navigation }) => {
   const { totalCost, userId, appointmentDetails } = route.params;
@@ -30,38 +30,34 @@ const PaymentScreen = ({ route, navigation }) => {
     "Advance Payment - VastraMitra"
   )}`;
 
-  // 🔹 handle payment through UPI apps like GPay or PhonePe
   const handleUPIPayment = async () => {
     try {
       setIsProcessing(true);
       const supported = await Linking.canOpenURL(upiUrl);
       if (!supported) {
-        Alert.alert(
-          "UPI App Not Found",
-          "No supported UPI app detected. Please use the QR option."
-        );
+        Alert.alert("UPI App Not Found", "Please use the QR code instead.");
         setIsProcessing(false);
         return;
       }
-
       await Linking.openURL(upiUrl);
       setIsProcessing(false);
-
-      // After manual completion
       Alert.alert(
-        "Complete Your Payment",
-        "Once you complete the payment, tap the 'I’ve Paid' button to confirm your appointment."
+        "Complete Payment",
+        "After payment, tap 'I’ve Paid' to confirm."
       );
     } catch (e) {
       console.error("Payment Error:", e);
-      Alert.alert("Error", "Something went wrong while opening UPI app.");
+      Alert.alert("Error", "Unable to open UPI app.");
       setIsProcessing(false);
     }
   };
 
-  // 🔹 confirm appointment manually or after successful callback
   const confirmAppointment = async (txnId = "MANUAL_CONFIRM") => {
     try {
+      // ✅ Ensure the parent document exists
+      await setDoc(doc(db, "appointments", userId), { userId }, { merge: true });
+
+      // ✅ Create new appointment under userAppointments subcollection
       const userAppointmentsRef = collection(
         db,
         "appointments",
@@ -73,34 +69,36 @@ const PaymentScreen = ({ route, navigation }) => {
       const newApp = {
         ...appointmentDetails,
         userId,
-        totalCost,
-        advancePaid: advanceAmount,
-        balanceDue: totalCost - advanceAmount,
+        totalCost: Number(totalCost),
+        advancePaid: Number(advanceAmount),
+        balanceDue: Number(totalCost - advanceAmount),
         paymentStatus: "Advance Paid",
-        status: "Pending", // ✅ FIXED — tailor must manually confirm
+        status: "Pending", // Tailor will confirm
         paymentTxnId: txnId,
         createdAt: serverTimestamp(),
-        };
+      };
 
-      // Save in both customer and tailor collections
+      // ✅ Save under user's appointment path
       await setDoc(userAppDoc, newApp);
-      await setDoc(
-        doc(collection(db, "tailorAppointments"), userAppDoc.id),
-        newApp
-      );
 
-      // Notify tailor
+      // ✅ Save same appointment globally for tailor
+      await setDoc(doc(collection(db, "tailorAppointments"), userAppDoc.id), {
+        ...newApp,
+        appointmentId: userAppDoc.id,
+      });
+
+      // ✅ Notify tailor
       await sendNotification(
-        "YvjGOga1CDWJhJfoxAvL7c7Z5sG2",
-        "New Appointment Confirmed",
-        `${newApp.fullName} paid ₹${advanceAmount} advance. Appointment confirmed!`
+        "YvjGOga1CDWJhJfoxAvL7c7Z5sG2", // tailor UID
+        "Advance Payment Received 💰",
+        `${newApp.fullName} paid ₹${advanceAmount} advance. Awaiting confirmation.`
       );
 
       Alert.alert("✅ Payment Successful", "Appointment booked successfully!");
       navigation.navigate("CustomerScreen");
     } catch (error) {
       console.error("Booking Error:", error);
-      Alert.alert("Error", "Something went wrong while saving appointment.");
+      Alert.alert("Error", "Failed to save appointment.");
     }
   };
 
@@ -131,34 +129,28 @@ const PaymentScreen = ({ route, navigation }) => {
             )}
           </TouchableOpacity>
 
-          <TouchableOpacity style={styles.qrBtn} onPress={() => setShowQR(true)}>
+          <TouchableOpacity
+            style={styles.qrBtn}
+            onPress={() => setShowQR(true)}
+          >
             <Text style={styles.qrText}>Show QR Code Instead</Text>
           </TouchableOpacity>
         </>
       ) : (
         <View style={styles.qrContainer}>
-          <Text style={styles.qrTitle}>
-            Scan this QR to pay ₹{advanceAmount}
-          </Text>
-          <View
-            style={{ backgroundColor: "#fff", padding: 16, borderRadius: 10 }}
-          >
+          <Text style={styles.qrTitle}>Scan this QR to pay ₹{advanceAmount}</Text>
+          <View style={{ backgroundColor: "#fff", padding: 16, borderRadius: 10 }}>
             <QRCode value={upiUrl} size={200} />
           </View>
           <Text style={styles.qrNote}>UPI ID: {UPI_ID}</Text>
 
-          {/* ✅ Added Manual Confirmation Button */}
           <TouchableOpacity
             style={styles.manualBtn}
             onPress={() =>
-              Alert.alert(
-                "Confirm Payment",
-                "If you have already completed the payment, tap Confirm to proceed.",
-                [
-                  { text: "Cancel" },
-                  { text: "Confirm", onPress: () => confirmAppointment() },
-                ]
-              )
+              Alert.alert("Confirm Payment", "Tap confirm after completing payment.", [
+                { text: "Cancel" },
+                { text: "Confirm", onPress: () => confirmAppointment() },
+              ])
             }
           >
             <Text style={styles.manualText}>✅ I’ve Paid — Confirm Appointment</Text>
@@ -168,7 +160,7 @@ const PaymentScreen = ({ route, navigation }) => {
             style={styles.qrBackBtn}
             onPress={() => setShowQR(false)}
           >
-            <Text style={styles.qrBackText}>← Back to Payment Options</Text>
+            <Text style={styles.qrBackText}>← Back</Text>
           </TouchableOpacity>
         </View>
       )}
@@ -183,21 +175,62 @@ const PaymentScreen = ({ route, navigation }) => {
   );
 };
 
-// 🎨 Styles
 const styles = StyleSheet.create({
-  container: { flex: 1, justifyContent: "center", alignItems: "center", backgroundColor: "#f8f9fa", padding: 20 },
+  container: {
+    flex: 1,
+    justifyContent: "center",
+    alignItems: "center",
+    backgroundColor: "#f8f9fa",
+    padding: 20,
+  },
   header: { fontSize: 22, fontWeight: "700", color: "#2c3e50", marginBottom: 20 },
-  summary: { backgroundColor: "#fff", padding: 20, borderRadius: 12, elevation: 2, width: "100%", alignItems: "center", marginBottom: 30 },
+  summary: {
+    backgroundColor: "#fff",
+    padding: 20,
+    borderRadius: 12,
+    elevation: 2,
+    width: "100%",
+    alignItems: "center",
+    marginBottom: 30,
+  },
   text: { fontSize: 16, fontWeight: "600", color: "#333", marginTop: 8 },
   note: { fontSize: 13, color: "#666", marginTop: 10, textAlign: "center" },
-  payBtn: { backgroundColor: "#007bff", paddingVertical: 14, borderRadius: 10, width: "100%", alignItems: "center" },
+  payBtn: {
+    backgroundColor: "#007bff",
+    paddingVertical: 14,
+    borderRadius: 10,
+    width: "100%",
+    alignItems: "center",
+  },
   payText: { color: "#fff", fontWeight: "700", fontSize: 16 },
-  qrBtn: { marginTop: 15, borderWidth: 1, borderColor: "#007bff", paddingVertical: 10, borderRadius: 10, width: "100%", alignItems: "center" },
+  qrBtn: {
+    marginTop: 15,
+    borderWidth: 1,
+    borderColor: "#007bff",
+    paddingVertical: 10,
+    borderRadius: 10,
+    width: "100%",
+    alignItems: "center",
+  },
   qrText: { color: "#007bff", fontWeight: "600" },
-  qrContainer: { alignItems: "center", backgroundColor: "#fff", padding: 20, borderRadius: 12, elevation: 3, marginBottom: 20 },
+  qrContainer: {
+    alignItems: "center",
+    backgroundColor: "#fff",
+    padding: 20,
+    borderRadius: 12,
+    elevation: 3,
+    marginBottom: 20,
+  },
   qrTitle: { fontSize: 16, fontWeight: "600", marginBottom: 10, color: "#2c3e50" },
   qrNote: { marginTop: 10, fontSize: 13, color: "#666" },
-  manualBtn: { marginTop: 20, backgroundColor: "#27ae60", padding: 12, borderRadius: 10, width: "100%", alignItems: "center" },
+  manualBtn: {
+    marginTop: 20,
+    backgroundColor: "#27ae60",
+    padding: 12,
+    borderRadius: 10,
+    width: "100%",
+    alignItems: "center",
+  },
   manualText: { color: "#fff", fontWeight: "700" },
   qrBackBtn: { marginTop: 15 },
   qrBackText: { color: "#007bff", fontWeight: "600" },

@@ -19,6 +19,7 @@ import {
   doc,
   addDoc,
   serverTimestamp,
+  updateDoc,
 } from 'firebase/firestore';
 import { db } from '../firebase/firebaseConfig';
 import { sendNotification } from '../utils/notificationService';
@@ -68,7 +69,7 @@ const AppointmentCalendar = ({ navigation }) => {
 
       // ✅ Only create an order when Confirmed
       if (newStatus === 'Confirmed') {
-        // Create order for tailor
+        // Create order for tailor (includes payment details)
         orderRef = await addDoc(collection(db, 'orders'), {
           userId: userId,
           appointmentId: id,
@@ -79,10 +80,12 @@ const AppointmentCalendar = ({ navigation }) => {
           address: appointment.address,
           date: appointment.date,
           time: appointment.time,
-          totalCost: appointment.totalCost || 0,
-          advancePaid: appointment.advancePaid || 0,
-          balanceDue: appointment.balanceDue || 0,
-          paymentStatus: appointment.paymentStatus || 'Pending',
+          totalCost: Number(appointment.totalCost) || 0,
+          advancePaid: Number(appointment.advancePaid) || 0,
+          balanceDue:
+            (Number(appointment.totalCost) || 0) -
+            (Number(appointment.advancePaid) || 0),
+          paymentStatus: appointment.paymentStatus || 'Advance Paid',
           status: 'Confirmed',
           createdAt: serverTimestamp(),
         });
@@ -98,10 +101,12 @@ const AppointmentCalendar = ({ navigation }) => {
           address: appointment.address,
           date: appointment.date,
           time: appointment.time,
-          totalCost: appointment.totalCost || 0,
-          advancePaid: appointment.advancePaid || 0,
-          balanceDue: appointment.balanceDue || 0,
-          paymentStatus: appointment.paymentStatus || 'Pending',
+          totalCost: Number(appointment.totalCost) || 0,
+          advancePaid: Number(appointment.advancePaid) || 0,
+          balanceDue:
+            (Number(appointment.totalCost) || 0) -
+            (Number(appointment.advancePaid) || 0),
+          paymentStatus: appointment.paymentStatus || 'Advance Paid',
           status: 'Confirmed',
           createdAt: serverTimestamp(),
         });
@@ -146,6 +151,34 @@ const AppointmentCalendar = ({ navigation }) => {
     } catch (err) {
       console.error('Error updating status:', err);
       Alert.alert('Error', 'Could not update appointment status');
+    }
+  };
+
+  // 🚀 NEW: Send Final Payment Reminder
+  const sendFinalPaymentReminder = async (appointment) => {
+    try {
+      const { userId, id, totalCost, advancePaid } = appointment;
+
+      const link = `vastramitra://finalpayment?appointmentId=${id}&userId=${userId}`;
+      const remaining = (Number(totalCost) || 0) - (Number(advancePaid) || 0);
+
+      await sendNotification(
+        userId,
+        "Your Order is Ready 🎉",
+        `Your outfit is ready! Please pay the remaining ₹${remaining} to confirm delivery.`,
+        link
+      );
+
+      // Update Firestore that reminder sent
+      await updateDoc(doc(db, "appointments", userId, "userAppointments", id), {
+        reminderSent: true,
+        deliveryStatus: "Ready for Delivery",
+      });
+
+      Alert.alert("✅ Reminder Sent", "Customer notified to pay the remaining balance.");
+    } catch (error) {
+      console.error("Reminder Error:", error);
+      Alert.alert("Error", "Failed to send payment reminder.");
     }
   };
 
@@ -280,15 +313,26 @@ const AppointmentCalendar = ({ navigation }) => {
                 </View>
               )}
 
-              {/* 💳 View Payment Button */}
+              {/* 💳 View Payment & Reminder Button */}
               {item.status === 'Confirmed' && (
-                <TouchableOpacity
-                  style={styles.paymentBtn}
-                  onPress={() => navigation.navigate('PaymentTailorScreen')}
-                >
-                  <Ionicons name="wallet-outline" size={16} color="#fff" />
-                  <Text style={styles.paymentBtnText}>View Payment</Text>
-                </TouchableOpacity>
+                <View>
+                  <TouchableOpacity
+                    style={styles.paymentBtn}
+                    onPress={() => navigation.navigate('PaymentTailorScreen')}
+                  >
+                    <Ionicons name="wallet-outline" size={16} color="#fff" />
+                    <Text style={styles.paymentBtnText}>View Payment</Text>
+                  </TouchableOpacity>
+
+                  {/* 🚀 New: Send Payment Reminder */}
+                  <TouchableOpacity
+                    style={[styles.paymentBtn, { backgroundColor: '#f39c12', marginTop: 8 }]}
+                    onPress={() => sendFinalPaymentReminder(item)}
+                  >
+                    <Ionicons name="notifications-outline" size={16} color="#fff" />
+                    <Text style={styles.paymentBtnText}>Send Final Payment Reminder</Text>
+                  </TouchableOpacity>
+                </View>
               )}
             </View>
           ))}

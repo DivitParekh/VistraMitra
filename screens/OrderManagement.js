@@ -107,21 +107,39 @@ const OrderManagement = () => {
           console.warn("⚠️ Unable to fetch order details for notification");
         }
 
+        // ✅ Always merge totals before sending reminder
+        const totalCost = Number(orderData?.totalCost) || 0;
+        const advancePaid = Number(orderData?.advancePaid) || 0;
+        const balanceDue = totalCost - advancePaid;
+
+        // ✅ Update appointment reference if exists
+        const appointmentId = orderData?.appointmentId;
+        if (appointmentId) {
+          await setDoc(
+            doc(db, "appointments", userId, "userAppointments", appointmentId),
+            {
+              status: newStatus,
+              totalCost,
+              advancePaid,
+              balanceDue,
+              updatedAt: new Date().toISOString(),
+            },
+            { merge: true }
+          );
+        }
+
         // 🔔 Notification logic
         if (newStatus === "Ready for Delivery") {
-          const totalCost = orderData?.totalCost || 0;
-          const advancePaid = orderData?.advancePaid || 0;
+          const deepLink = `vastramitra://finalpayment?appointmentId=${appointmentId}&userId=${userId}`;
 
           await sendNotification(
             userId,
-            "Ready for Delivery 🚚",
-            "Your order is ready! Tap here to complete the remaining payment.",
-            {
-              appointmentId: orderId,
-              totalCost,
-              advancePaid,
-            }
+            "Your Order is Ready 🎉",
+            `Your outfit is ready! Please pay the remaining ₹${balanceDue} to confirm delivery.`,
+            deepLink
           );
+
+          console.log(`📩 Final Payment Reminder sent to ${userId}`);
         } else if (newStatus === "Completed") {
           await sendNotification(
             userId,
