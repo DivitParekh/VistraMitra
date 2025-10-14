@@ -64,95 +64,84 @@ const AppointmentCalendar = ({ navigation }) => {
 
   // 🔹 Confirm or Reject Appointment
   const updateStatus = async (id, newStatus, userId, appointment) => {
-    try {
-      let orderRef = null;
+  try {
+    if (!userId) {
+      Alert.alert("Error", "Cannot confirm — missing customer info.");
+      return;
+    }
 
-      // ✅ Only create an order when Confirmed
-      if (newStatus === 'Confirmed') {
-        // Create order for tailor (includes payment details)
-        orderRef = await addDoc(collection(db, 'orders'), {
-          userId: userId,
-          appointmentId: id,
-          customerName: appointment.fullName,
-          styleCategory: appointment.styleCategory || null,
-          styleImage: appointment.styleImage || null,
-          fabric: appointment.fabric || null,
-          address: appointment.address,
-          date: appointment.date,
-          time: appointment.time,
-          totalCost: Number(appointment.totalCost) || 0,
-          advancePaid: Number(appointment.advancePaid) || 0,
-          balanceDue:
-            (Number(appointment.totalCost) || 0) -
-            (Number(appointment.advancePaid) || 0),
-          paymentStatus: appointment.paymentStatus || 'Advance Paid',
-          status: 'Confirmed',
-          createdAt: serverTimestamp(),
-        });
+    // ✅ Confirm only: Create order + tasks
+    if (newStatus === "Confirmed") {
+      const orderId = id; // reuse appointment ID for linking
 
-        // Create order in customer's orders subcollection
-        await setDoc(doc(db, 'users', userId, 'orders', orderRef.id), {
-          orderId: orderRef.id,
-          appointmentId: id,
-          customerName: appointment.fullName,
-          styleCategory: appointment.styleCategory || null,
-          styleImage: appointment.styleImage || null,
-          fabric: appointment.fabric || null,
-          address: appointment.address,
-          date: appointment.date,
-          time: appointment.time,
-          totalCost: Number(appointment.totalCost) || 0,
-          advancePaid: Number(appointment.advancePaid) || 0,
-          balanceDue:
-            (Number(appointment.totalCost) || 0) -
-            (Number(appointment.advancePaid) || 0),
-          paymentStatus: appointment.paymentStatus || 'Advance Paid',
-          status: 'Confirmed',
-          createdAt: serverTimestamp(),
-        });
-
-        // Generate default task stages
-        const stages = ['Cutting', 'Stitching', 'Handwork', 'Packaging'];
-        for (const stage of stages) {
-          await addDoc(collection(db, 'taskManager'), {
-            orderId: orderRef.id,
-            userId: userId,
-            customerName: appointment.fullName,
-            stage,
-            status: 'Pending',
-            createdAt: serverTimestamp(),
-          });
-        }
-      }
-
-      // ✅ Update appointment status globally
-      const updateData = {
-        ...appointment,
-        userId: userId,
-        status: newStatus,
-        ...(orderRef ? { orderId: orderRef.id } : {}),
+      const orderData = {
+        orderId,
+        appointmentId: id,
+        userId,
+        customerName: appointment.fullName || "Customer",
+        styleCategory: appointment.styleCategory || "Custom Style",
+        styleImage: appointment.styleImage || null,
+        fabric: appointment.fabric || "Customer Fabric",
+        address: appointment.address || "",
+        date: appointment.date,
+        time: appointment.time,
+        totalCost: appointment.totalCost || 0,
+        advancePaid: appointment.advancePaid || 0,
+        balanceDue:
+          (appointment.totalCost || 0) - (appointment.advancePaid || 0),
+        paymentStatus: appointment.paymentStatus || "Advance Paid",
+        status: "Confirmed",
+        createdAt: serverTimestamp(),
       };
 
-      await setDoc(doc(db, 'tailorAppointments', id), updateData, { merge: true });
-      await setDoc(doc(db, 'appointments', userId, 'userAppointments', id), updateData, {
-        merge: true,
-      });
+      // 🟢 Create in both paths
+      await setDoc(doc(db, "orders", orderId), orderData);
+      await setDoc(doc(db, "users", userId, "orders", orderId), orderData);
 
-      // 🔔 Send notification based on status
-      await sendNotification(
-        userId,
-        newStatus === 'Confirmed' ? 'Appointment Confirmed ✅' : 'Appointment Rejected ❌',
-        newStatus === 'Confirmed'
-          ? `Your appointment on ${appointment.date} at ${appointment.time} has been confirmed.`
-          : `Sorry, your appointment on ${appointment.date} at ${appointment.time} was rejected.`
-      );
-
-      Alert.alert('Success', `Appointment marked as ${newStatus}`);
-    } catch (err) {
-      console.error('Error updating status:', err);
-      Alert.alert('Error', 'Could not update appointment status');
+      // 🧵 Default task creation
+      const stages = ["Cutting", "Stitching", "Handwork", "Packaging"];
+      for (const stage of stages) {
+        await addDoc(collection(db, "taskManager"), {
+          orderId,
+          userId,
+          customerName: appointment.fullName,
+          stage,
+          status: "Pending",
+          createdAt: serverTimestamp(),
+        });
+      }
     }
-  };
+
+    // ✅ Update appointment status globally
+    await setDoc(
+      doc(db, "tailorAppointments", id),
+      { ...appointment, status: newStatus },
+      { merge: true }
+    );
+    await setDoc(
+      doc(db, "appointments", userId, "userAppointments", id),
+      { ...appointment, status: newStatus },
+      { merge: true }
+    );
+
+    // 🔔 Send notification
+    await sendNotification(
+      userId,
+      newStatus === "Confirmed"
+        ? "Appointment Confirmed ✅"
+        : "Appointment Rejected ❌",
+      newStatus === "Confirmed"
+        ? `Your appointment on ${appointment.date} at ${appointment.time} has been confirmed.`
+        : `Sorry, your appointment on ${appointment.date} at ${appointment.time} was rejected.`
+    );
+
+    Alert.alert("Success", `Appointment marked as ${newStatus}`);
+  } catch (err) {
+    console.error("Error updating status:", err);
+    Alert.alert("Error", "Could not update appointment status");
+  }
+};
+
 
   // 🚀 NEW: Send Final Payment Reminder
   const sendFinalPaymentReminder = async (appointment) => {
@@ -324,7 +313,7 @@ const AppointmentCalendar = ({ navigation }) => {
                     <Text style={styles.paymentBtnText}>View Payment</Text>
                   </TouchableOpacity>
 
-                  {/* 🚀 New: Send Payment Reminder */}
+                  {/* 🚀 Send Payment Reminder */}
                   <TouchableOpacity
                     style={[styles.paymentBtn, { backgroundColor: '#f39c12', marginTop: 8 }]}
                     onPress={() => sendFinalPaymentReminder(item)}

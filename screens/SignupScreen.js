@@ -8,18 +8,16 @@ import {
   Alert,
   ActivityIndicator,
 } from 'react-native';
-
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { createUserWithEmailAndPassword } from 'firebase/auth';
 import { doc, setDoc } from 'firebase/firestore';
-import { auth, db } from '../firebase/firebaseConfig'; // ✅ Correct path to your config
+import { auth, db } from '../firebase/firebaseConfig';
 
 const SignupScreen = ({ navigation }) => {
-  // Form state
   const [name, setName] = useState('');
   const [emailOrPhone, setEmailOrPhone] = useState('');
   const [password, setPassword] = useState('');
-  const [loading, setLoading] = useState(false); // Show spinner
+  const [loading, setLoading] = useState(false);
 
   const handleSignup = async () => {
     if (!name || !emailOrPhone || !password) {
@@ -30,7 +28,7 @@ const SignupScreen = ({ navigation }) => {
     try {
       setLoading(true);
 
-      // 1. Create user in Firebase Auth
+      // 1️⃣ Create user in Firebase Auth
       const userCredential = await createUserWithEmailAndPassword(
         auth,
         emailOrPhone,
@@ -38,20 +36,21 @@ const SignupScreen = ({ navigation }) => {
       );
       const user = userCredential.user;
 
-      // 2. Save extra info in Firestore
+      // 2️⃣ Save user info in Firestore
       await setDoc(doc(db, 'users', user.uid), {
         name,
         emailOrPhone,
         createdAt: new Date(),
       });
 
-      // 3. Save login status
+      // 3️⃣ Save login status locally
       await AsyncStorage.setItem('isLoggedIn', 'true');
-      await AsyncStorage.setItem('uid', user.uid);             {/* <-- Updated here */}
+      await AsyncStorage.setItem('uid', user.uid);
 
-      // 4. Navigate to home screen
-      navigation.replace('Home');
+      // 4️⃣ Navigate to Home
+      navigation.replace('CustomerScreen');
     } catch (error) {
+      console.error('Signup Error:', error);
       Alert.alert('Signup Error', error.message);
     } finally {
       setLoading(false);
@@ -59,7 +58,8 @@ const SignupScreen = ({ navigation }) => {
   };
 
   return (
-    <SafeAreaView style={styles.container}>
+    // 🟢 replaced SafeAreaView with View to avoid crash
+    <View style={styles.container}>
       <Text style={styles.title}>Create Your Account</Text>
 
       <TextInput
@@ -86,7 +86,11 @@ const SignupScreen = ({ navigation }) => {
         onChangeText={setPassword}
       />
 
-      <TouchableOpacity style={styles.signupButton} onPress={handleSignup} disabled={loading}>
+      <TouchableOpacity
+        style={styles.signupButton}
+        onPress={handleSignup}
+        disabled={loading}
+      >
         {loading ? (
           <ActivityIndicator color="#fff" />
         ) : (
@@ -99,7 +103,7 @@ const SignupScreen = ({ navigation }) => {
           Already have an account? <Text style={styles.link}>Login</Text>
         </Text>
       </TouchableOpacity>
-    </SafeAreaView>
+    </View>
   );
 };
 

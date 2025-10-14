@@ -1,4 +1,5 @@
 import React, { useEffect, useState } from 'react';
+import { View, ActivityIndicator, Text, StyleSheet } from 'react-native';
 import { NavigationContainer } from '@react-navigation/native';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import AppNavigator from './navigation/AppNavigator';
@@ -14,7 +15,7 @@ import { doc, setDoc } from 'firebase/firestore';
 // ✅ Configure notifications for SDK 54+
 Notifications.setNotificationHandler({
   handleNotification: async () => ({
-    shouldShowBanner: true,   // 👈 replaces shouldShowAlert
+    shouldShowBanner: true,
     shouldPlaySound: true,
     shouldSetBadge: false,
   }),
@@ -24,6 +25,7 @@ const App = () => {
   const [showOnboarding, setShowOnboarding] = useState(null);
   const [isLoggedIn, setIsLoggedIn] = useState(null);
   const [userRole, setUserRole] = useState(null);
+  const [loading, setLoading] = useState(true);
 
   // 🔹 Load onboarding, login, and role from AsyncStorage
   useEffect(() => {
@@ -33,11 +35,15 @@ const App = () => {
         const loggedIn = await AsyncStorage.getItem('isLoggedIn');
         const role = await AsyncStorage.getItem('userRole');
 
-        setShowOnboarding(onboarding === null);
+        console.log('📦 Storage values:', { onboarding, loggedIn, role });
+
+        setShowOnboarding(onboarding === null); // show onboarding if not seen
         setIsLoggedIn(loggedIn === 'true');
         setUserRole(role);
       } catch (error) {
         console.log('Error loading storage', error);
+      } finally {
+        setLoading(false);
       }
     };
 
@@ -47,31 +53,24 @@ const App = () => {
   // 🔹 Notifications setup
   useEffect(() => {
     registerForPushNotificationsAsync().then(async (token) => {
-      if (token) {
-        console.log('Expo Push Token:', token);
-
-        // Save to Firestore if user logged in
-        if (auth.currentUser) {
-          try {
-            await setDoc(
-              doc(db, 'users', auth.currentUser.uid),
-              { expoPushToken: token },
-              { merge: true }
-            );
-            console.log('Token saved to Firestore ✅');
-          } catch (error) {
-            console.log('Error saving token:', error);
-          }
+      if (token && auth.currentUser) {
+        try {
+          await setDoc(
+            doc(db, 'users', auth.currentUser.uid),
+            { expoPushToken: token },
+            { merge: true }
+          );
+          console.log('Token saved to Firestore ✅');
+        } catch (error) {
+          console.log('Error saving token:', error);
         }
       }
     });
 
-    // Foreground listener
     const subscription = Notifications.addNotificationReceivedListener((notification) => {
       console.log('Notification received:', notification);
     });
 
-    // Tapped notification listener
     const responseSubscription = Notifications.addNotificationResponseReceivedListener((response) => {
       console.log('User tapped notification:', response);
     });
@@ -82,8 +81,14 @@ const App = () => {
     };
   }, []);
 
-  if (showOnboarding === null || isLoggedIn === null || userRole === null) {
-    return null; // Wait until AsyncStorage is loaded
+  // 🌀 Show loading screen while waiting for AsyncStorage
+  if (loading) {
+    return (
+      <View style={styles.loader}>
+        <ActivityIndicator size="large" color="#007bff" />
+        <Text style={styles.loadingText}>Loading VastraMitra...</Text>
+      </View>
+    );
   }
 
   return (
@@ -96,5 +101,19 @@ const App = () => {
     </NavigationContainer>
   );
 };
+
+const styles = StyleSheet.create({
+  loader: {
+    flex: 1,
+    justifyContent: 'center',
+    alignItems: 'center',
+    backgroundColor: '#fff',
+  },
+  loadingText: {
+    marginTop: 10,
+    color: '#555',
+    fontSize: 16,
+  },
+});
 
 export default App;

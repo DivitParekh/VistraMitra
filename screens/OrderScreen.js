@@ -1,4 +1,3 @@
-// screens/OrderScreen.js
 import React, { useEffect, useState } from 'react';
 import {
   View,
@@ -6,20 +5,27 @@ import {
   FlatList,
   StyleSheet,
   ActivityIndicator,
+  TouchableOpacity,
+  Alert,
 } from 'react-native';
 import {
   collection,
   query,
   onSnapshot,
   where,
+  getDoc,
+  doc,
 } from 'firebase/firestore';
 import { db } from '../firebase/firebaseConfig';
 import AsyncStorage from '@react-native-async-storage/async-storage';
+import { useNavigation } from '@react-navigation/native';
+import { generateInvoice } from '../utils/invoiceGenerator'; // ✅ NEW IMPORT
 
 const OrderScreen = () => {
   const [orders, setOrders] = useState([]);
   const [tasks, setTasks] = useState({});
   const [loading, setLoading] = useState(true);
+  const navigation = useNavigation();
 
   useEffect(() => {
     let taskUnsubscribers = [];
@@ -34,7 +40,6 @@ const OrderScreen = () => {
           return;
         }
 
-        // ✅ Always fetch from user’s subcollection
         const userOrdersRef = collection(db, 'users', uid, 'orders');
         unsubscribeOrders = onSnapshot(userOrdersRef, (snapshot) => {
           const orderData = snapshot.docs.map((doc) => ({
@@ -52,9 +57,7 @@ const OrderScreen = () => {
       }
     };
 
-    // helper to listen for tasks per order
     const setupTaskListeners = (orderData, uid) => {
-      // cleanup old listeners
       taskUnsubscribers.forEach((fn) => fn && fn());
       taskUnsubscribers = [];
 
@@ -62,7 +65,7 @@ const OrderScreen = () => {
         const tq = query(
           collection(db, 'taskManager'),
           where('orderId', '==', order.id),
-          where('userId', '==', uid) // ✅ Customers only see their own tasks
+          where('userId', '==', uid)
         );
 
         const taskUnsub = onSnapshot(tq, (taskSnap) => {
@@ -84,6 +87,7 @@ const OrderScreen = () => {
     };
   }, []);
 
+  // 🔹 Task Renderer
   const renderTask = (task) => (
     <View key={task.id} style={styles.taskCard}>
       <Text style={styles.taskText}>
@@ -93,6 +97,89 @@ const OrderScreen = () => {
     </View>
   );
 
+  // ✅ Payment Button Handler
+  const handlePayRemaining = async (item) => {
+    try {
+      const uid = await AsyncStorage.getItem('uid');
+      let totalCost = item.totalCost;
+      let advancePaid = item.advancePaid;
+
+      console.log('🟡 Checking payment info for order:', item.id);
+
+      if (!totalCost || !advancePaid) {
+        const userOrderRef = doc(db, 'users', uid, 'orders', item.id);
+        const userSnap = await getDoc(userOrderRef);
+        if (userSnap.exists()) {
+          const data = userSnap.data();
+          totalCost = data.totalCost || totalCost;
+          advancePaid = data.advancePaid || advancePaid;
+        }
+      }
+
+      if (!totalCost || !advancePaid) {
+        const globalOrderRef = doc(db, 'orders', item.id);
+        const globalSnap = await getDoc(globalOrderRef);
+        if (globalSnap.exists()) {
+          const data = globalSnap.data();
+          totalCost = data.totalCost || totalCost;
+          advancePaid = data.advancePaid || advancePaid;
+        }
+      }
+
+      if (!totalCost || !advancePaid) {
+        const tailorAppRef = doc(db, 'tailorAppointments', item.appointmentId || item.id);
+        const tailorSnap = await getDoc(tailorAppRef);
+        if (tailorSnap.exists()) {
+          const data = tailorSnap.data();
+          totalCost = data.totalCost || totalCost;
+          advancePaid = data.advancePaid || advancePaid;
+        }
+      }
+
+      if (!totalCost || !advancePaid) {
+        Alert.alert(
+          'Missing Payment Info',
+          'Unable to find payment details for this order. Please contact your tailor.'
+        );
+        return;
+      }
+
+      navigation.navigate('FinalPaymentScreen', {
+        appointmentId: item.appointmentId || item.id,
+        userId: item.userId || uid,
+        totalCost: Number(totalCost),
+        advancePaid: Number(advancePaid),
+      });
+    } catch (err) {
+      console.error('Error navigating to payment:', err);
+      Alert.alert('Error', 'Unable to open payment screen.');
+    }
+  };
+
+  // ✅ Generate & Share Invoice
+  const handleDownloadInvoice = async (item) => {
+    try {
+      const invoiceData = {
+        orderId: item.id,
+        customerName: item.customerName || 'Customer',
+        fabric: item.fabric || 'Own Fabric',
+        styleCategory: item.style || 'Custom Stitch',
+        totalCost: item.totalCost || 0,
+        advancePaid: item.advancePaid || 0,
+        balanceDue: 0,
+        date: new Date().toISOString(),
+        address: item.address || 'N/A',
+      };
+
+      await generateInvoice(invoiceData);
+      Alert.alert('📄 Invoice Generated', 'Invoice opened for sharing.');
+    } catch (error) {
+      console.error('❌ Error generating invoice:', error);
+      Alert.alert('Error', 'Unable to generate invoice.');
+    }
+  };
+
+  // 🔹 Render Orders
   const renderOrder = ({ item }) => (
     <View style={styles.orderCard}>
       <Text style={styles.title}>Order: {item.id}</Text>
@@ -115,6 +202,25 @@ const OrderScreen = () => {
           {item.status}
         </Text>
       </Text>
+
+      {item.status === 'Ready for Delivery' &&
+        item.paymentStatus !== 'Full Paid' && (
+          <TouchableOpacity
+            style={styles.payBtn}
+            onPress={() => handlePayRemaining(item)}
+          >
+            <Text style={styles.payText}>💳 Pay Remaining 70%</Text>
+          </TouchableOpacity>
+        )}
+
+      {item.paymentStatus === 'Full Paid' && (
+        <TouchableOpacity
+          style={styles.invoiceBtn}
+          onPress={() => handleDownloadInvoice(item)}
+        >
+          <Text style={styles.invoiceText}>📥 Download Invoice</Text>
+        </TouchableOpacity>
+      )}
 
       {tasks[item.id]?.length > 0 ? (
         <>
@@ -151,6 +257,7 @@ const OrderScreen = () => {
   );
 };
 
+// 🧾 Styles
 const styles = StyleSheet.create({
   container: { flex: 1, backgroundColor: '#f9f9f9', padding: 16 },
   heading: {
@@ -195,6 +302,22 @@ const styles = StyleSheet.create({
   },
   taskText: { fontSize: 14, fontWeight: '500' },
   taskStatus: { fontWeight: '600', color: '#007bff' },
+  payBtn: {
+    backgroundColor: '#27ae60',
+    paddingVertical: 10,
+    borderRadius: 8,
+    marginTop: 10,
+    alignItems: 'center',
+  },
+  payText: { color: '#fff', fontWeight: '600', fontSize: 15 },
+  invoiceBtn: {
+    backgroundColor: '#007bff',
+    paddingVertical: 10,
+    borderRadius: 8,
+    marginTop: 10,
+    alignItems: 'center',
+  },
+  invoiceText: { color: '#fff', fontWeight: '600', fontSize: 15 },
 });
 
 export default OrderScreen;

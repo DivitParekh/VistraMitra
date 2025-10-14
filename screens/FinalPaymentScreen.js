@@ -1,3 +1,4 @@
+// screens/FinalPaymentScreen.js
 import React, { useState, useEffect } from "react";
 import {
   View,
@@ -5,250 +6,170 @@ import {
   StyleSheet,
   TouchableOpacity,
   Alert,
-  Linking,
   ActivityIndicator,
 } from "react-native";
 import { Ionicons } from "@expo/vector-icons";
-import { db } from "../firebase/firebaseConfig";
-import { doc, updateDoc, getDoc } from "firebase/firestore";
 import QRCode from "react-native-qrcode-svg";
+import { db } from "../firebase/firebaseConfig";
+import {
+  doc,
+  setDoc,
+  serverTimestamp,
+  collection,
+} from "firebase/firestore";
 import { sendNotification } from "../utils/notificationService";
-
-const UPI_ID = "jethvaakshat3@oksbi"; // ✅ tailor UPI
-const NAME = "Akshat Jethva"; // ✅ tailor name
+import AsyncStorage from "@react-native-async-storage/async-storage";
+import { getAuth, onAuthStateChanged } from "firebase/auth";
 
 const FinalPaymentScreen = ({ route, navigation }) => {
-  const [appointmentId, setAppointmentId] = useState(route?.params?.appointmentId || null);
-  const [userId, setUserId] = useState(route?.params?.userId || null);
-  const [totalCost, setTotalCost] = useState(Number(route?.params?.totalCost) || 0);
-  const [advancePaid, setAdvancePaid] = useState(Number(route?.params?.advancePaid) || 0);
-  const [balanceAmount, setBalanceAmount] = useState(0);
+  const { appointmentId, userId: routeUserId, totalCost, advancePaid } = route.params;
+  const [isProcessing, setIsProcessing] = useState(false);
   const [showQR, setShowQR] = useState(false);
-  const [loading, setLoading] = useState(true);
+  const [authUid, setAuthUid] = useState(null);
 
-  // 🧭 Deep link listener (for notifications)
-  useEffect(() => {
-    const subscription = Linking.addEventListener("url", handleDeepLink);
-    checkInitialUrl();
-    return () => subscription.remove();
-  }, []);
-
-  const checkInitialUrl = async () => {
-    const initialUrl = await Linking.getInitialURL();
-    if (initialUrl) handleDeepLink({ url: initialUrl });
-    else fetchLatestData(); // 👈 fallback fetch if no deep link
-  };
-
-  // 🔹 Fetch appointment from Firestore if params are missing
-  const fetchLatestData = async () => {
-    try {
-      if (!appointmentId || !userId) return;
-      const appRef = doc(db, "appointments", userId, "userAppointments", appointmentId);
-      const snap = await getDoc(appRef);
-      if (snap.exists()) {
-        const data = snap.data();
-        setTotalCost(Number(data.totalCost) || 0);
-        setAdvancePaid(Number(data.advancePaid) || 0);
-      }
-    } catch (err) {
-      console.error("Error fetching appointment:", err);
-    }
-  };
-
-  // 🔗 Handle deep link
-  const handleDeepLink = async ({ url }) => {
-    try {
-      if (url.includes("vastramitra://finalpayment")) {
-        const params = new URLSearchParams(url.split("?")[1]);
-        const appId = params.get("appointmentId");
-        const uid = params.get("userId");
-
-        if (appId && uid) {
-          setAppointmentId(appId);
-          setUserId(uid);
-          const appRef = doc(db, "appointments", uid, "userAppointments", appId);
-          const snap = await getDoc(appRef);
-          if (snap.exists()) {
-            const data = snap.data();
-            setTotalCost(Number(data.totalCost) || 0);
-            setAdvancePaid(Number(data.advancePaid) || 0);
-          }
-        }
-      }
-    } catch (err) {
-      console.error("Deep link error:", err);
-    }
-  };
-
-  // 🧮 Calculate balance dynamically
-  useEffect(() => {
-    const remaining = (Number(totalCost) || 0) - (Number(advancePaid) || 0);
-    setBalanceAmount(remaining > 0 ? remaining : 0);
-    setLoading(false);
-  }, [totalCost, advancePaid]);
+  const remainingAmount = Math.max(0, Number(totalCost) - Number(advancePaid));
+  const UPI_ID = "jethvaakshat3@oksbi";
+  const NAME = "Akshat Jethva";
 
   const upiUrl = `upi://pay?pa=${UPI_ID}&pn=${encodeURIComponent(
     NAME
-  )}&am=${balanceAmount}&cu=INR&tn=${encodeURIComponent("Final Payment - VastraMitra")}`;
+  )}&am=${remainingAmount}&cu=INR&tn=${encodeURIComponent(
+    "Final Payment - VastraMitra"
+  )}`;
 
-  const handleUPIPayment = async () => {
-    try {
-      const supported = await Linking.canOpenURL(upiUrl);
-      if (!supported) {
-        Alert.alert("No UPI App Found", "Please scan the QR below to complete payment.");
-        setShowQR(true);
-        return;
+  // ✅ Get logged-in Firebase UID (real auth, not just AsyncStorage)
+  useEffect(() => {
+    const auth = getAuth();
+    const unsubscribe = onAuthStateChanged(auth, async (user) => {
+      if (user) {
+        console.log("✅ Firebase Auth UID:", user.uid);
+        setAuthUid(user.uid);
+      } else {
+        // fallback to AsyncStorage UID (if app saved it)
+        const storedUid = await AsyncStorage.getItem("uid");
+        console.log("⚠️ Using AsyncStorage UID:", storedUid);
+        setAuthUid(storedUid || null);
       }
+    });
+    return () => unsubscribe();
+  }, []);
 
-      await Linking.openURL(upiUrl);
-      Alert.alert("Confirm Payment", "After completing payment, tap Confirm below.", [
-        { text: "Cancel", style: "cancel" },
-        { text: "Confirm", onPress: () => confirmFinalPayment() },
-      ]);
-    } catch (error) {
-      console.error("Payment error:", error);
-      Alert.alert("Error", "Unable to open UPI app.");
+  const submitFinalPayment = async (txnId = "FINAL_MANUAL_CONFIRM") => {
+    if (!authUid) {
+      Alert.alert("Auth Error", "No user logged in. Please re-login and try again.");
+      return;
     }
-  };
 
-  // ✅ Confirm and update Firestore
-  const confirmFinalPayment = async () => {
     try {
-      if (!appointmentId || !userId) {
-        Alert.alert("Error", "Missing appointment information.");
-        return;
-      }
+      setIsProcessing(true);
 
-      const appointmentRef = doc(db, "appointments", userId, "userAppointments", appointmentId);
-      const tailorRef = doc(db, "tailorAppointments", appointmentId);
-
-      await updateDoc(appointmentRef, {
-        paymentStatus: "Full Paid",
-        balanceDue: 0,
-      });
-      await updateDoc(tailorRef, {
-        paymentStatus: "Full Paid",
-        balanceDue: 0,
+      const payRef = doc(collection(db, "payments"));
+      await setDoc(payRef, {
+        paymentId: payRef.id,
+        userId: authUid, // ✅ must match Firebase Auth UID
+        orderId: appointmentId,
+        type: "final",
+        amount: Number(remainingAmount),
+        status: "submitted", // tailor will verify it
+        txnId,
+        createdAt: serverTimestamp(),
       });
 
+      console.log("✅ Payment record created:", payRef.id);
+
+      // notify tailor to verify
       await sendNotification(
         "YvjGOga1CDWJhJfoxAvL7c7Z5sG2",
-        "Final Payment Received 💰",
-        `The customer has paid the remaining ₹${balanceAmount}. The order is now fully paid.`
+        "Final Payment Submitted 💳",
+        `Customer submitted final payment for order ${appointmentId}. Please verify and mark as Full Paid.`
       );
 
-      Alert.alert("✅ Payment Successful", "Thank you! Your order is fully paid.");
+      Alert.alert(
+        "Payment Submitted ✅",
+        "Your final payment request has been submitted. The tailor will verify and send your invoice."
+      );
       navigation.navigate("CustomerScreen");
-    } catch (err) {
-      console.error("Payment confirm error:", err);
-      Alert.alert("Error", "Could not confirm payment.");
+    } catch (error) {
+      console.error("❌ Final Payment Error:", error);
+      Alert.alert(
+        "Final Payment Error",
+        `FirebaseError: ${error.message || "Unable to create payment record"}`
+      );
+    } finally {
+      setIsProcessing(false);
     }
   };
-
-  if (loading) {
-    return (
-      <View style={styles.center}>
-        <ActivityIndicator size="large" color="#007bff" />
-        <Text style={{ marginTop: 8 }}>Fetching payment info...</Text>
-      </View>
-    );
-  }
 
   return (
     <View style={styles.container}>
       <Text style={styles.header}>Final Payment</Text>
 
-      {balanceAmount > 0 ? (
-        <>
-          <Text style={styles.text}>Remaining Balance: ₹{balanceAmount}</Text>
+      <View style={styles.summary}>
+        <Ionicons name="cash-outline" size={26} color="#007bff" />
+        <Text style={styles.text}>Total: ₹{totalCost}</Text>
+        <Text style={styles.text}>Advance Paid: ₹{advancePaid}</Text>
+        <Text style={styles.text}>Remaining: ₹{remainingAmount} (70%)</Text>
+      </View>
 
-          {!showQR ? (
-            <>
-              <TouchableOpacity style={styles.payBtn} onPress={handleUPIPayment}>
-                <Text style={styles.payText}>Pay ₹{balanceAmount} via UPI</Text>
-              </TouchableOpacity>
-
-              <TouchableOpacity style={styles.qrBtn} onPress={() => setShowQR(true)}>
-                <Text style={styles.qrText}>Show QR Code</Text>
-              </TouchableOpacity>
-            </>
+      {!showQR ? (
+        <TouchableOpacity
+          style={[styles.payBtn, isProcessing && { opacity: 0.7 }]}
+          onPress={() => setShowQR(true)}
+          disabled={isProcessing}
+        >
+          {isProcessing ? (
+            <ActivityIndicator color="#fff" />
           ) : (
-            <View style={styles.qrBox}>
-              <QRCode value={upiUrl} size={200} />
-              <Text style={styles.note}>Scan this to pay ₹{balanceAmount}</Text>
-              <TouchableOpacity onPress={() => setShowQR(false)}>
-                <Text style={styles.qrText}>← Back</Text>
-              </TouchableOpacity>
-            </View>
+            <Text style={styles.payText}>Pay ₹{remainingAmount} via UPI</Text>
           )}
+        </TouchableOpacity>
+      ) : (
+        <View style={styles.qrContainer}>
+          <Text style={styles.qrTitle}>Scan this QR to pay ₹{remainingAmount}</Text>
+          <View style={{ backgroundColor: "#fff", padding: 16, borderRadius: 10 }}>
+            <QRCode value={upiUrl} size={200} />
+          </View>
+          <Text style={styles.qrNote}>UPI ID: {UPI_ID}</Text>
 
           <TouchableOpacity
             style={styles.confirmBtn}
             onPress={() =>
               Alert.alert(
                 "Confirm Payment",
-                "Have you received payment successfully?",
+                "Tap confirm only after you’ve completed the payment in your UPI app.",
                 [
                   { text: "Cancel" },
-                  { text: "Yes", onPress: confirmFinalPayment },
+                  { text: "Confirm", onPress: () => submitFinalPayment() },
                 ]
               )
             }
           >
-            <Text style={styles.confirmText}>✅ Confirm Payment Received</Text>
+            <Text style={styles.confirmText}>✅ I’ve Paid — Submit for Verification</Text>
           </TouchableOpacity>
-        </>
-      ) : (
-        <Text style={styles.text}>✅ No pending payment. Thank you!</Text>
-      )}
 
-      <TouchableOpacity style={styles.cancelBtn} onPress={() => navigation.goBack()}>
-        <Text style={styles.cancelText}>← Back</Text>
-      </TouchableOpacity>
+          <TouchableOpacity style={styles.qrBackBtn} onPress={() => setShowQR(false)}>
+            <Text style={styles.qrBackText}>← Back</Text>
+          </TouchableOpacity>
+        </View>
+      )}
     </View>
   );
 };
 
 const styles = StyleSheet.create({
-  container: { flex: 1, alignItems: "center", justifyContent: "center", backgroundColor: "#f8f9fa", padding: 20 },
-  center: { flex: 1, justifyContent: "center", alignItems: "center" },
-  header: { fontSize: 22, fontWeight: "700", marginBottom: 20, color: "#2c3e50" },
-  text: { fontSize: 16, color: "#333", marginBottom: 10 },
-  payBtn: {
-    backgroundColor: "#007bff",
-    padding: 12,
-    borderRadius: 10,
-    alignItems: "center",
-    marginVertical: 10,
-    width: "80%",
-  },
-  payText: { color: "#fff", fontWeight: "700" },
-  qrBtn: {
-    borderWidth: 1,
-    borderColor: "#007bff",
-    borderRadius: 10,
-    paddingVertical: 8,
-    paddingHorizontal: 20,
-  },
-  qrText: { color: "#007bff", fontWeight: "600", marginTop: 10 },
-  qrBox: {
-    backgroundColor: "#fff",
-    padding: 20,
-    borderRadius: 12,
-    alignItems: "center",
-    elevation: 2,
-  },
-  note: { color: "#555", marginTop: 10 },
-  confirmBtn: {
-    marginTop: 20,
-    backgroundColor: "#27ae60",
-    paddingVertical: 10,
-    paddingHorizontal: 20,
-    borderRadius: 10,
-  },
+  container: { flex: 1, justifyContent: "center", alignItems: "center", backgroundColor: "#f8f9fa", padding: 20 },
+  header: { fontSize: 22, fontWeight: "700", color: "#2c3e50", marginBottom: 20 },
+  summary: { backgroundColor: "#fff", padding: 20, borderRadius: 12, elevation: 2, width: "100%", alignItems: "center", marginBottom: 30 },
+  text: { fontSize: 16, fontWeight: "600", color: "#333", marginTop: 8 },
+  payBtn: { backgroundColor: "#007bff", paddingVertical: 14, borderRadius: 10, width: "100%", alignItems: "center" },
+  payText: { color: "#fff", fontWeight: "700", fontSize: 16 },
+  qrContainer: { alignItems: "center", backgroundColor: "#fff", padding: 20, borderRadius: 12, elevation: 3 },
+  qrTitle: { fontSize: 16, fontWeight: "600", marginBottom: 10, color: "#2c3e50" },
+  qrNote: { marginTop: 10, fontSize: 13, color: "#666" },
+  confirmBtn: { marginTop: 20, backgroundColor: "#27ae60", padding: 12, borderRadius: 10, width: "100%", alignItems: "center" },
   confirmText: { color: "#fff", fontWeight: "700" },
-  cancelBtn: { marginTop: 30 },
-  cancelText: { color: "#777" },
+  qrBackBtn: { marginTop: 15 },
+  qrBackText: { color: "#007bff", fontWeight: "600" },
 });
 
 export default FinalPaymentScreen;

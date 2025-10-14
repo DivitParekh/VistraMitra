@@ -9,7 +9,7 @@ import {
 } from 'react-native';
 import { Ionicons, FontAwesome5, MaterialCommunityIcons } from '@expo/vector-icons';
 import { collection, getDocs, query, where, onSnapshot } from 'firebase/firestore';
-import { SafeAreaView } from 'react-native-safe-area-context';
+import { SafeAreaView } from 'react-native-safe-area-context'; // ✅ Correct import
 import { db, auth } from '../firebase/firebaseConfig';
 
 const TailorScreen = ({ navigation }) => {
@@ -23,15 +23,13 @@ const TailorScreen = ({ navigation }) => {
   useEffect(() => {
     const fetchDashboard = async () => {
       try {
+        if (!auth.currentUser) return;
+
         const ordersSnapshot = await getDocs(collection(db, 'orders'));
         let totalSales = 0;
-
         ordersSnapshot.forEach((doc) => {
           const data = doc.data();
-          totalSales += data.advancePaid || 0;
-          if (data.paymentStatus === 'paid') {
-            totalSales += data.balanceDue || 0;
-          }
+          if (data?.totalCost) totalSales += data.totalCost;
         });
 
         setOrdersCount(ordersSnapshot.size);
@@ -64,7 +62,7 @@ const TailorScreen = ({ navigation }) => {
     });
 
     return () => unsubscribe();
-  }, []);
+  }, [auth.currentUser]);
 
   return (
     <SafeAreaView style={styles.container}>
@@ -78,8 +76,6 @@ const TailorScreen = ({ navigation }) => {
           onPress={() => navigation.navigate('Notifications')}
         >
           <Ionicons name="notifications-outline" size={22} color="#2c3e50" />
-
-          {/* 🔴 Badge for unread notifications */}
           {unreadCount > 0 && (
             <View style={styles.badge}>
               <Text style={styles.badgeText}>
@@ -240,10 +236,6 @@ const styles = StyleSheet.create({
     paddingVertical: 16,
     borderRadius: 16,
     elevation: 3,
-    shadowColor: '#000',
-    shadowOpacity: 0.05,
-    shadowRadius: 5,
-    marginBottom: 16,
   },
   statsCard: {
     flex: 1,
@@ -280,9 +272,6 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'center',
     elevation: 3,
-    shadowColor: '#000',
-    shadowOpacity: 0.05,
-    shadowRadius: 4,
   },
   cardText: {
     fontSize: 14,

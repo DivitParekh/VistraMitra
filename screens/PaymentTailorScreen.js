@@ -1,191 +1,170 @@
-import React, { useEffect, useState, useMemo } from "react";
+// screens/PaymentTailorScreen.js
+import React, { useEffect, useState } from "react";
 import {
   View,
   Text,
-  StyleSheet,
   FlatList,
+  StyleSheet,
   TouchableOpacity,
   ActivityIndicator,
   Alert,
 } from "react-native";
-import { Ionicons } from "@expo/vector-icons";
 import {
   collection,
   onSnapshot,
-  updateDoc,
   doc,
+  updateDoc,
+  setDoc,
+  getDoc,
+  serverTimestamp,
   query,
-  orderBy,
+  where,
 } from "firebase/firestore";
 import { db } from "../firebase/firebaseConfig";
+import { Ionicons } from "@expo/vector-icons";
+import { sendNotification } from "../utils/notificationService";
 
-const PaymentTailorScreen = ({ navigation }) => {
-  const [appointments, setAppointments] = useState([]);
+const PaymentTailorScreen = () => {
+  const [payments, setPayments] = useState([]);
   const [loading, setLoading] = useState(true);
-  const [filter, setFilter] = useState("all");
 
   useEffect(() => {
-    const q = query(collection(db, "tailorAppointments"), orderBy("createdAt", "desc"));
+    const q = query(collection(db, "payments"), where("status", "==", "submitted"));
     const unsubscribe = onSnapshot(q, (snapshot) => {
-      const data = snapshot.docs.map((doc) => ({ id: doc.id, ...doc.data() }));
-      setAppointments(data);
+      const paymentData = snapshot.docs.map((doc) => ({
+        id: doc.id,
+        ...doc.data(),
+      }));
+      setPayments(paymentData);
       setLoading(false);
     });
+
     return () => unsubscribe();
   }, []);
 
-  // 🧮 Calculate totals using useMemo for performance
-  const { totalCollected, totalPending } = useMemo(() => {
-    let collected = 0;
-    let pending = 0;
-
-    appointments.forEach((app) => {
-      if (app.paymentStatus === "Advance Paid" || app.paymentStatus === "Full Paid") {
-        collected += app.advancePaid || 0;
-      }
-      if (app.paymentStatus !== "Full Paid") {
-        pending += app.balanceDue || 0;
-      }
-    });
-
-    return { totalCollected: collected, totalPending: pending };
-  }, [appointments]);
-
-  const handleFinalPayment = async (id) => {
+  // ✅ Handle final payment verification by tailor
+  const handleFinalPayment = async (payment) => {
     try {
-      const appointmentRef = doc(db, "tailorAppointments", id);
-      await updateDoc(appointmentRef, {
-        paymentStatus: "Full Paid",
-        balanceDue: 0,
-      });
-      Alert.alert("✅ Payment Completed", "Marked as fully paid.");
+      Alert.alert(
+        "Confirm Payment Verification",
+        `Mark payment for Order ID: ${payment.orderId} as verified?`,
+        [
+          { text: "Cancel", style: "cancel" },
+          {
+            text: "Confirm",
+            onPress: async () => {
+              setLoading(true);
+
+              const { userId, orderId } = payment;
+              const appointmentRef = doc(db, "tailorAppointments", orderId);
+              const snap = await getDoc(appointmentRef);
+              if (!snap.exists()) {
+                Alert.alert("Error", "Appointment not found.");
+                setLoading(false);
+                return;
+              }
+
+              const ap = snap.data();
+              const { totalCost = 0, advancePaid = 0, fullName } = ap;
+
+              // ✅ 1) Update payment record to verified
+              const paymentRef = doc(db, "payments", payment.id);
+              await updateDoc(paymentRef, {
+                status: "verified",
+                verifiedAt: serverTimestamp(),
+              });
+
+              // ✅ 2) Update appointment
+              await updateDoc(appointmentRef, {
+                paymentStatus: "Full Paid",
+                balanceDue: 0,
+                updatedAt: serverTimestamp(),
+              });
+
+              // ✅ 3) Update global order
+              const orderRef = doc(db, "orders", orderId);
+              await setDoc(
+                orderRef,
+                {
+                  paymentStatus: "Full Paid",
+                  balanceDue: 0,
+                  totalCost,
+                  advancePaid,
+                  updatedAt: serverTimestamp(),
+                },
+                { merge: true }
+              );
+
+              // ✅ 4) Update user's order
+              const userOrderRef = doc(db, "users", userId, "orders", orderId);
+              await setDoc(
+                userOrderRef,
+                {
+                  paymentStatus: "Full Paid",
+                  balanceDue: 0,
+                  totalCost,
+                  advancePaid,
+                  updatedAt: serverTimestamp(),
+                },
+                { merge: true }
+              );
+
+              // ✅ 5) Notify customer
+              await sendNotification(
+                userId,
+                "Final Payment Verified ✅",
+                `Hi ${fullName || "Customer"}, your final payment has been verified. You can now download your invoice.`
+              );
+
+              Alert.alert("✅ Verified", "Payment marked as Full Paid successfully.");
+              setLoading(false);
+            },
+          },
+        ]
+      );
     } catch (err) {
-      console.error("Error updating payment:", err);
+      console.error("Error verifying payment:", err);
+      Alert.alert("Error", "Failed to verify final payment.");
+      setLoading(false);
     }
   };
 
-  const filteredData =
-    filter === "all"
-      ? appointments
-      : appointments.filter((a) =>
-          filter === "paid"
-            ? a.paymentStatus === "Advance Paid" || a.paymentStatus === "Full Paid"
-            : a.paymentStatus === "Pending"
-        );
-
-  if (loading)
-    return (
-      <View style={styles.center}>
-        <ActivityIndicator size="large" color="#007bff" />
+  const renderItem = ({ item }) => (
+    <View style={styles.card}>
+      <View style={styles.row}>
+        <Ionicons name="cash-outline" size={20} color="#007bff" />
+        <Text style={styles.title}>Payment ID: {item.id}</Text>
       </View>
-    );
+
+      <Text style={styles.detail}>Order ID: {item.orderId}</Text>
+      <Text style={styles.detail}>Customer ID: {item.userId}</Text>
+      <Text style={styles.detail}>Amount: ₹{item.amount}</Text>
+      <Text style={styles.detail}>Type: {item.type}</Text>
+      <Text style={styles.detail}>Status: {item.status}</Text>
+
+      <TouchableOpacity
+        style={styles.verifyBtn}
+        onPress={() => handleFinalPayment(item)}
+      >
+        <Text style={styles.verifyText}>✅ Mark as Verified (Full Paid)</Text>
+      </TouchableOpacity>
+    </View>
+  );
 
   return (
     <View style={styles.container}>
-      <Text style={styles.header}>💰 Tailor Payment Dashboard</Text>
+      <Text style={styles.heading}>Pending Payments</Text>
 
-      {/* 🧾 Summary Bar */}
-      <View style={styles.summaryContainer}>
-        <View style={styles.summaryBox}>
-          <Ionicons name="cash-outline" size={22} color="#27ae60" />
-          <Text style={styles.summaryLabel}>Collected</Text>
-          <Text style={styles.summaryValue}>₹{totalCollected}</Text>
-        </View>
-        <View style={styles.summaryBox}>
-          <Ionicons name="time-outline" size={22} color="#e67e22" />
-          <Text style={styles.summaryLabel}>Pending</Text>
-          <Text style={styles.summaryValue}>₹{totalPending}</Text>
-        </View>
-      </View>
-
-      {/* Filter Tabs */}
-      <View style={styles.filterRow}>
-        {["all", "paid", "pending"].map((f) => (
-          <TouchableOpacity
-            key={f}
-            style={[styles.filterBtn, filter === f && styles.filterActive]}
-            onPress={() => setFilter(f)}
-          >
-            <Text
-              style={[
-                styles.filterText,
-                filter === f && styles.filterActiveText,
-              ]}
-            >
-              {f === "all"
-                ? "All"
-                : f === "paid"
-                ? "Paid"
-                : "Pending"}
-            </Text>
-          </TouchableOpacity>
-        ))}
-      </View>
-
-      {filteredData.length === 0 ? (
-        <Text style={styles.noData}>No records found for this filter.</Text>
+      {loading ? (
+        <ActivityIndicator size="large" color="#007bff" style={{ marginTop: 30 }} />
+      ) : payments.length === 0 ? (
+        <Text style={styles.empty}>No pending payments found.</Text>
       ) : (
         <FlatList
-          data={filteredData}
+          data={payments}
+          renderItem={renderItem}
           keyExtractor={(item) => item.id}
-          renderItem={({ item }) => (
-            <View style={styles.card}>
-              <View style={styles.rowBetween}>
-                <View style={{ flex: 1 }}>
-                  <Text style={styles.name}>{item.fullName}</Text>
-                  <Text style={styles.subText}>📞 {item.phone}</Text>
-                  <Text style={styles.subText}>
-                    Advance: ₹{item.advancePaid || 0}
-                  </Text>
-                  <Text style={styles.subText}>
-                    Balance: ₹{item.balanceDue || 0}
-                  </Text>
-                </View>
-
-                <View
-                  style={[
-                    styles.statusBadge,
-                    item.paymentStatus === "Full Paid"
-                      ? styles.fullPaid
-                      : item.paymentStatus === "Advance Paid"
-                      ? styles.advancePaid
-                      : styles.pending,
-                  ]}
-                >
-                  <Ionicons
-                    name={
-                      item.paymentStatus === "Full Paid"
-                        ? "checkmark-done"
-                        : item.paymentStatus === "Advance Paid"
-                        ? "cash-outline"
-                        : "alert-circle-outline"
-                    }
-                    size={14}
-                    color="#fff"
-                  />
-                  <Text style={styles.statusText}>{item.paymentStatus}</Text>
-                </View>
-              </View>
-
-              {item.paymentStatus === "Advance Paid" && (
-                <TouchableOpacity
-                  style={styles.finalBtn}
-                  onPress={() =>
-                    Alert.alert(
-                      "Mark as Fully Paid?",
-                      "Confirm that you received the final payment.",
-                      [
-                        { text: "Cancel", style: "cancel" },
-                        { text: "Confirm", onPress: () => handleFinalPayment(item.id) },
-                      ]
-                    )
-                  }
-                >
-                  <Text style={styles.finalText}>Mark Final Payment Received</Text>
-                </TouchableOpacity>
-              )}
-            </View>
-          )}
+          contentContainerStyle={{ paddingBottom: 80 }}
         />
       )}
     </View>
@@ -193,78 +172,35 @@ const PaymentTailorScreen = ({ navigation }) => {
 };
 
 const styles = StyleSheet.create({
-  container: { flex: 1, backgroundColor: "#f8f9fa", padding: 16 },
-  header: {
-    fontSize: 20,
+  container: { flex: 1, backgroundColor: "#f9f9f9", padding: 16 },
+  heading: {
+    fontSize: 22,
     fontWeight: "700",
     color: "#2c3e50",
-    marginBottom: 10,
     textAlign: "center",
+    marginBottom: 20,
   },
-
-  // 🧾 Summary bar styles
-  summaryContainer: {
-    flexDirection: "row",
-    justifyContent: "space-around",
-    marginVertical: 10,
-  },
-  summaryBox: {
-    backgroundColor: "#fff",
-    borderRadius: 12,
-    elevation: 2,
-    width: "45%",
-    alignItems: "center",
-    paddingVertical: 10,
-  },
-  summaryLabel: { fontSize: 13, color: "#555", marginTop: 4 },
-  summaryValue: { fontSize: 18, fontWeight: "700", color: "#2c3e50" },
-
-  filterRow: {
-    flexDirection: "row",
-    justifyContent: "space-around",
-    marginVertical: 10,
-  },
-  filterBtn: {
-    borderWidth: 1,
-    borderColor: "#007bff",
-    borderRadius: 8,
-    paddingVertical: 6,
-    paddingHorizontal: 16,
-  },
-  filterText: { color: "#007bff", fontWeight: "600" },
-  filterActive: { backgroundColor: "#007bff" },
-  filterActiveText: { color: "#fff" },
-  noData: { textAlign: "center", marginTop: 40, color: "#777", fontSize: 15 },
   card: {
     backgroundColor: "#fff",
-    borderRadius: 12,
     padding: 16,
-    elevation: 2,
-    marginBottom: 12,
-  },
-  rowBetween: { flexDirection: "row", justifyContent: "space-between", alignItems: "center" },
-  name: { fontSize: 16, fontWeight: "700", color: "#2c3e50" },
-  subText: { fontSize: 13, color: "#555", marginTop: 3 },
-  statusBadge: {
-    flexDirection: "row",
-    alignItems: "center",
-    paddingHorizontal: 8,
-    paddingVertical: 4,
     borderRadius: 12,
+    marginBottom: 14,
+    elevation: 3,
+    borderLeftWidth: 5,
+    borderLeftColor: "#007bff",
   },
-  statusText: { color: "#fff", fontSize: 12, fontWeight: "600", marginLeft: 4 },
-  advancePaid: { backgroundColor: "#27ae60" },
-  fullPaid: { backgroundColor: "#2ecc71" },
-  pending: { backgroundColor: "#f39c12" },
-  finalBtn: {
-    marginTop: 10,
-    backgroundColor: "#007bff",
-    paddingVertical: 8,
+  row: { flexDirection: "row", alignItems: "center", marginBottom: 6 },
+  title: { fontSize: 16, fontWeight: "600", marginLeft: 6 },
+  detail: { fontSize: 14, color: "#555", marginTop: 2 },
+  verifyBtn: {
+    marginTop: 12,
+    backgroundColor: "#27ae60",
+    paddingVertical: 10,
     borderRadius: 8,
     alignItems: "center",
   },
-  finalText: { color: "#fff", fontWeight: "600" },
-  center: { flex: 1, justifyContent: "center", alignItems: "center" },
+  verifyText: { color: "#fff", fontWeight: "700" },
+  empty: { textAlign: "center", fontSize: 16, color: "#888", marginTop: 30 },
 });
 
 export default PaymentTailorScreen;

@@ -1,5 +1,5 @@
 // screens/OrderManagement.js
-import React, { useEffect, useState } from 'react';
+import React, { useEffect, useState } from "react";
 import {
   View,
   Text,
@@ -8,7 +8,7 @@ import {
   StyleSheet,
   ActivityIndicator,
   Alert,
-} from 'react-native';
+} from "react-native";
 import {
   collection,
   query,
@@ -18,18 +18,19 @@ import {
   where,
   getDoc,
   setDoc,
-} from 'firebase/firestore';
-import { db, auth } from '../firebase/firebaseConfig';
-import { sendNotification } from '../utils/notificationService';
+} from "firebase/firestore";
+import { db, auth } from "../firebase/firebaseConfig";
+import { sendNotification } from "../utils/notificationService";
 
-const TAILOR_UID = 'YvjGOga1CDWJhJfoxAvL7c7Z5sG2';
+const TAILOR_UID = "YvjGOga1CDWJhJfoxAvL7c7Z5sG2";
 
-const OrderManagement = () => {
+const OrderManagement = ({ navigation }) => {
   const [orders, setOrders] = useState([]);
   const [tasks, setTasks] = useState({});
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
+    // 🧩 Guard to prevent running when user not logged in
     const user = auth.currentUser;
     if (!user) {
       console.warn("⚠️ No user logged in, skipping order fetch");
@@ -39,81 +40,86 @@ const OrderManagement = () => {
 
     let q;
     if (user.uid === TAILOR_UID) {
-      q = query(collection(db, 'orders')); // tailor sees all orders
+      q = query(collection(db, "orders")); // Tailor sees all orders
     } else {
-      q = collection(db, 'users', user.uid, 'orders'); // customer sees their own
+      q = collection(db, "users", user.uid, "orders"); // Customer sees only their own
     }
 
-    const unsubscribe = onSnapshot(q, (snapshot) => {
-      const orderData = snapshot.docs.map((doc) => ({
-        id: doc.id,
-        ...doc.data(),
-      }));
-      setOrders(orderData);
-      setLoading(false);
+    const unsubscribeOrders = onSnapshot(
+      q,
+      (snapshot) => {
+        const orderData = snapshot.docs.map((doc) => ({
+          id: doc.id,
+          ...doc.data(),
+        }));
+        setOrders(orderData);
+        setLoading(false);
 
-      // Fetch tasks per order
-      orderData.forEach((order) => {
-        if (
-          auth.currentUser?.uid === TAILOR_UID ||
-          order.userId === auth.currentUser?.uid
-        ) {
-          const tq = query(
-            collection(db, 'taskManager'),
-            where('orderId', '==', order.id)
-          );
-          onSnapshot(tq, (taskSnap) => {
-            const taskData = taskSnap.docs.map((d) => ({
-              id: d.id,
-              ...d.data(),
-            }));
-            setTasks((prev) => ({ ...prev, [order.id]: taskData }));
-          });
-        }
-      });
-    });
+        // Fetch tasks per order safely
+        orderData.forEach((order) => {
+          if (
+            auth.currentUser?.uid === TAILOR_UID ||
+            order.userId === auth.currentUser?.uid
+          ) {
+            const tq = query(
+              collection(db, "taskManager"),
+              where("orderId", "==", order.id)
+            );
 
-    return () => unsubscribe();
-  }, []);
+            // Listen for task updates
+            onSnapshot(tq, (taskSnap) => {
+              const taskData = taskSnap.docs.map((d) => ({
+                id: d.id,
+                ...d.data(),
+              }));
+              setTasks((prev) => ({ ...prev, [order.id]: taskData }));
+            });
+          }
+        });
+      },
+      (err) => {
+        console.error("❌ Firestore order listener failed:", err);
+        setLoading(false);
+      }
+    );
+
+    return () => unsubscribeOrders();
+  }, [auth.currentUser]);
 
   // 🔹 Update Order Status + Send Notification
   const updateOrderStatus = async (orderId, newStatus, userId) => {
     try {
-      if (auth.currentUser?.uid !== TAILOR_UID) return; // customers blocked
+      const currentUser = auth.currentUser;
+      if (!currentUser || currentUser.uid !== TAILOR_UID) return; // Customers blocked
 
-      // Update in global orders
-      const orderRef = doc(db, 'orders', orderId);
+      const orderRef = doc(db, "orders", orderId);
       await updateDoc(orderRef, { status: newStatus });
 
-      // Mirror update inside customer’s collection
+      // Mirror update inside customer's subcollection
       if (userId) {
-        const userOrderRef = doc(db, 'users', userId, 'orders', orderId);
+        const userOrderRef = doc(db, "users", userId, "orders", orderId);
         const snap = await getDoc(userOrderRef);
 
         if (snap.exists()) {
           await updateDoc(userOrderRef, { status: newStatus });
         } else {
-          await setDoc(userOrderRef, { status: newStatus, orderId, userId }, { merge: true });
+          await setDoc(
+            userOrderRef,
+            { status: newStatus, orderId, userId },
+            { merge: true }
+          );
         }
 
-        // 🔔 Fetch order details (for totalCost + advancePaid)
-        let orderData = null;
-        try {
-          const fullOrderSnap = await getDoc(orderRef);
-          if (fullOrderSnap.exists()) {
-            orderData = fullOrderSnap.data();
-          }
-        } catch (err) {
-          console.warn("⚠️ Unable to fetch order details for notification");
-        }
+        // 🧩 Fetch full order details
+        const fullSnap = await getDoc(orderRef);
+        const orderData = fullSnap.exists() ? fullSnap.data() : null;
 
-        // ✅ Always merge totals before sending reminder
         const totalCost = Number(orderData?.totalCost) || 0;
         const advancePaid = Number(orderData?.advancePaid) || 0;
         const balanceDue = totalCost - advancePaid;
+        const appointmentId = orderData?.appointmentId || null;
 
-        // ✅ Update appointment reference if exists
-        const appointmentId = orderData?.appointmentId;
+        // 🔄 Sync appointment status
         if (appointmentId) {
           await setDoc(
             doc(db, "appointments", userId, "userAppointments", appointmentId),
@@ -131,14 +137,12 @@ const OrderManagement = () => {
         // 🔔 Notification logic
         if (newStatus === "Ready for Delivery") {
           const deepLink = `vastramitra://finalpayment?appointmentId=${appointmentId}&userId=${userId}`;
-
           await sendNotification(
             userId,
             "Your Order is Ready 🎉",
             `Your outfit is ready! Please pay the remaining ₹${balanceDue} to confirm delivery.`,
             deepLink
           );
-
           console.log(`📩 Final Payment Reminder sent to ${userId}`);
         } else if (newStatus === "Completed") {
           await sendNotification(
@@ -163,7 +167,7 @@ const OrderManagement = () => {
     }
   };
 
-  // 🔹 Render individual Task
+  // 🔹 Render Task
   const renderTask = (task) => (
     <View key={task.id} style={styles.taskCard}>
       <Text style={styles.taskText}>
@@ -172,43 +176,64 @@ const OrderManagement = () => {
     </View>
   );
 
-  // 🔹 Render individual Order
+  // 🔹 Render Order Card
   const renderOrder = ({ item }) => (
     <View style={styles.orderCard}>
       <Text style={styles.title}>Order: {item.id}</Text>
-      <Text style={styles.subtext}>Customer: {item.customerName || 'N/A'}</Text>
-      <Text style={styles.subtext}>Style: {item.style || 'N/A'}</Text>
-      <Text style={styles.subtext}>Fabric: {item.fabric || 'Own Cloth'}</Text>
+      <Text style={styles.subtext}>Customer: {item.customerName || "N/A"}</Text>
+      <Text style={styles.subtext}>Style: {item.style || "N/A"}</Text>
+      <Text style={styles.subtext}>Fabric: {item.fabric || "Own Cloth"}</Text>
       <Text style={styles.subtext}>
-        Status: <Text style={{ fontWeight: '600' }}>{item.status}</Text>
+        Status: <Text style={{ fontWeight: "600" }}>{item.status}</Text>
       </Text>
 
-      {/* Tailor only controls order status */}
+      {/* 💳 Pay Remaining Button (Customer Side) */}
+      {auth.currentUser?.uid !== TAILOR_UID &&
+        item.status === "Ready for Delivery" &&
+        item.paymentStatus !== "Full Paid" && (
+          <TouchableOpacity
+            style={styles.payBtn}
+            onPress={() =>
+              navigation.navigate("FinalPaymentScreen", {
+                appointmentId: item.appointmentId,
+                userId: auth.currentUser.uid,
+                totalCost: item.totalCost,
+                advancePaid: item.advancePaid,
+              })
+            }
+          >
+            <Text style={styles.payText}>💳 Pay Remaining 70%</Text>
+          </TouchableOpacity>
+        )}
+
+      {/* Tailor Only Status Control */}
       {auth.currentUser?.uid === TAILOR_UID && (
         <View style={styles.buttonGroup}>
-          {["Confirmed", "In Progress", "Ready for Delivery", "Completed"].map((status) => (
-            <TouchableOpacity
-              key={status}
-              style={[
-                styles.statusButton,
-                item.status === status && styles.activeButton,
-              ]}
-              onPress={() => updateOrderStatus(item.id, status, item.userId)}
-            >
-              <Text
+          {["Confirmed", "In Progress", "Ready for Delivery", "Completed"].map(
+            (status) => (
+              <TouchableOpacity
+                key={status}
                 style={[
-                  styles.statusText,
-                  item.status === status && styles.activeText,
+                  styles.statusButton,
+                  item.status === status && styles.activeButton,
                 ]}
+                onPress={() => updateOrderStatus(item.id, status, item.userId)}
               >
-                {status}
-              </Text>
-            </TouchableOpacity>
-          ))}
+                <Text
+                  style={[
+                    styles.statusText,
+                    item.status === status && styles.activeText,
+                  ]}
+                >
+                  {status}
+                </Text>
+              </TouchableOpacity>
+            )
+          )}
         </View>
       )}
 
-      {/* Render associated tasks */}
+      {/* Tasks Section */}
       <Text style={styles.sectionTitle}>Tasks</Text>
       {tasks[item.id]?.length > 0 ? (
         tasks[item.id].map((t) => renderTask(t))
@@ -223,7 +248,11 @@ const OrderManagement = () => {
       <Text style={styles.heading}>Order Management</Text>
 
       {loading ? (
-        <ActivityIndicator size="large" color="#2196F3" style={{ marginTop: 30 }} />
+        <ActivityIndicator
+          size="large"
+          color="#2196F3"
+          style={{ marginTop: 30 }}
+        />
       ) : orders.length === 0 ? (
         <Text style={{ textAlign: "center", marginTop: 20, fontSize: 16 }}>
           No orders yet.
@@ -281,6 +310,14 @@ const styles = StyleSheet.create({
   statusText: { fontSize: 14, color: "#444" },
   activeButton: { backgroundColor: "#2196F3", borderColor: "#1976D2" },
   activeText: { color: "#fff", fontWeight: "600" },
+  payBtn: {
+    backgroundColor: "#27ae60",
+    padding: 10,
+    borderRadius: 8,
+    marginTop: 10,
+    alignItems: "center",
+  },
+  payText: { color: "#fff", fontWeight: "600" },
   taskCard: {
     backgroundColor: "#f8f8f8",
     borderRadius: 8,

@@ -5,6 +5,7 @@ import {
   StyleSheet,
   TouchableOpacity,
   ScrollView,
+  Alert,
 } from 'react-native';
 import {
   Ionicons,
@@ -12,27 +13,47 @@ import {
   FontAwesome5,
 } from '@expo/vector-icons';
 import { collection, query, where, onSnapshot } from 'firebase/firestore';
-import { SafeAreaView } from 'react-native-safe-area-context';
+import { SafeAreaView } from 'react-native-safe-area-context'; // ✅ Proper import
 import { db, auth } from '../firebase/firebaseConfig';
 
 const CustomerScreen = ({ navigation }) => {
   const [unreadCount, setUnreadCount] = useState(0);
+  const [listenerActive, setListenerActive] = useState(false);
 
-  // 🔹 Subscribe to unread notifications
+  // ✅ Subscribe to unread notifications safely
   useEffect(() => {
-    if (!auth.currentUser) return;
+    let unsubscribe = null;
 
-    const q = query(
-      collection(db, 'notifications', auth.currentUser.uid, 'userNotifications'),
-      where('read', '==', false)
-    );
+    const initListener = async () => {
+      if (!auth.currentUser) {
+        console.warn('⚠️ No user logged in, skipping notifications fetch');
+        return;
+      }
 
-    const unsubscribe = onSnapshot(q, (snapshot) => {
-      setUnreadCount(snapshot.size);
-    });
+      const q = query(
+        collection(db, 'notifications', auth.currentUser.uid, 'userNotifications'),
+        where('read', '==', false)
+      );
 
-    return () => unsubscribe();
-  }, []);
+      unsubscribe = onSnapshot(
+        q,
+        (snapshot) => {
+          setUnreadCount(snapshot.size);
+          setListenerActive(true);
+        },
+        (error) => {
+          console.error('❌ Firestore Listener Error:', error.message);
+          setListenerActive(false);
+        }
+      );
+    };
+
+    initListener();
+
+    return () => {
+      if (unsubscribe) unsubscribe();
+    };
+  }, [auth.currentUser]);
 
   return (
     <SafeAreaView style={styles.container}>
@@ -43,7 +64,13 @@ const CustomerScreen = ({ navigation }) => {
 
         <TouchableOpacity
           style={styles.notificationIcon}
-          onPress={() => navigation.navigate('Notifications')}
+          onPress={() => {
+            if (!auth.currentUser) {
+              Alert.alert('Please Log In', 'You must be logged in to view notifications.');
+              return;
+            }
+            navigation.navigate('Notifications');
+          }}
         >
           <Ionicons name="notifications-outline" size={22} color="#2c3e50" />
 
@@ -60,7 +87,6 @@ const CustomerScreen = ({ navigation }) => {
 
       {/* Scrollable Content */}
       <ScrollView contentContainerStyle={styles.menuContainer}>
-
         {/* Promo Banner */}
         <TouchableOpacity
           style={styles.promoCard}
@@ -173,12 +199,10 @@ const styles = StyleSheet.create({
     color: '#34495e',
     marginTop: 6,
   },
-
   menuContainer: {
     padding: 20,
     paddingBottom: 100,
   },
-
   promoCard: {
     backgroundColor: '#ffeedd',
     padding: 20,
@@ -196,7 +220,6 @@ const styles = StyleSheet.create({
     marginTop: 6,
     color: '#a04000',
   },
-
   row: {
     flexDirection: 'row',
     justifyContent: 'space-between',
@@ -210,10 +233,6 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'center',
     elevation: 4,
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.2,
-    shadowRadius: 4,
   },
   cardText: {
     fontSize: 14,
@@ -222,7 +241,6 @@ const styles = StyleSheet.create({
     color: '#2c3e50',
     textAlign: 'center',
   },
-
   bottomNav: {
     flexDirection: 'row',
     justifyContent: 'space-around',

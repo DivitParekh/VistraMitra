@@ -30,7 +30,7 @@ import ProfileScreen from '../screens/ProfileScreen';
 import PaymentScreen from '../screens/PaymentScreen';
 import PaymentTailorScreen from '../screens/PaymentTailorScreen';
 import FinalPaymentScreen from '../screens/FinalPaymentScreen';
-
+import OTPScreen from '../screens/OTPScreen';
 const Stack = createNativeStackNavigator();
 
 const AppNavigator = ({ showOnboarding }) => {
@@ -101,6 +101,7 @@ const AppNavigator = ({ showOnboarding }) => {
       <Stack.Screen name="PaymentScreen" component={PaymentScreen} />
       <Stack.Screen name="PaymentTailorScreen" component={PaymentTailorScreen} />
       <Stack.Screen name="FinalPaymentScreen" component={FinalPaymentScreen} />
+      <Stack.Screen name="OTPScreen" component={OTPScreen} />
 
     </Stack.Navigator>
   );

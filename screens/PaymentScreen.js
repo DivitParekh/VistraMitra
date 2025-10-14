@@ -52,12 +52,18 @@ const PaymentScreen = ({ route, navigation }) => {
     }
   };
 
+  // ✅ Confirm Appointment after Advance Payment
   const confirmAppointment = async (txnId = "MANUAL_CONFIRM") => {
     try {
-      // ✅ Ensure the parent document exists
-      await setDoc(doc(db, "appointments", userId), { userId }, { merge: true });
+      setIsProcessing(true);
+      console.log("🟢 Booking started for user:", userId);
 
-      // ✅ Create new appointment under userAppointments subcollection
+      // ✅ Step 1: Ensure parent path exists
+      console.log("🪶 Writing parent: appointments/" + userId);
+      await setDoc(doc(db, "appointments", userId), { userId }, { merge: true });
+      console.log("✅ Parent doc created/exists.");
+
+      // ✅ Step 2: Write to userAppointments subcollection
       const userAppointmentsRef = collection(
         db,
         "appointments",
@@ -65,40 +71,72 @@ const PaymentScreen = ({ route, navigation }) => {
         "userAppointments"
       );
       const userAppDoc = doc(userAppointmentsRef);
+      const appointmentId = userAppDoc.id;
 
       const newApp = {
         ...appointmentDetails,
         userId,
+        appointmentId,
         totalCost: Number(totalCost),
         advancePaid: Number(advanceAmount),
         balanceDue: Number(totalCost - advanceAmount),
         paymentStatus: "Advance Paid",
-        status: "Pending", // Tailor will confirm
+        status: "Pending",
         paymentTxnId: txnId,
         createdAt: serverTimestamp(),
       };
 
-      // ✅ Save under user's appointment path
+      console.log(
+        "🪶 Writing to: appointments/" +
+          userId +
+          "/userAppointments/" +
+          appointmentId
+      );
       await setDoc(userAppDoc, newApp);
+      console.log("✅ Sub-appointment created successfully.");
 
-      // ✅ Save same appointment globally for tailor
-      await setDoc(doc(collection(db, "tailorAppointments"), userAppDoc.id), {
+      // Small delay before next write
+      await new Promise((res) => setTimeout(res, 200));
+
+      // ✅ Step 3: Write global copy for tailor
+      const tailorDocRef = doc(db, "tailorAppointments", appointmentId);
+      console.log("🪶 Writing to: tailorAppointments/" + appointmentId);
+      await setDoc(tailorDocRef, {
         ...newApp,
-        appointmentId: userAppDoc.id,
+        userId,
+        appointmentId,
+        createdBy: userId,
+        createdAt: serverTimestamp(),
       });
+      console.log("✅ Tailor appointment created successfully.");
 
-      // ✅ Notify tailor
+      // ✅ Step 4: Notify tailor
       await sendNotification(
-        "YvjGOga1CDWJhJfoxAvL7c7Z5sG2", // tailor UID
+        "YvjGOga1CDWJhJfoxAvL7c7Z5sG2",
         "Advance Payment Received 💰",
         `${newApp.fullName} paid ₹${advanceAmount} advance. Awaiting confirmation.`
       );
+      console.log("🔔 Notification sent.");
 
       Alert.alert("✅ Payment Successful", "Appointment booked successfully!");
       navigation.navigate("CustomerScreen");
     } catch (error) {
-      console.error("Booking Error:", error);
-      Alert.alert("Error", "Failed to save appointment.");
+      console.error("❌ Booking Error:", error);
+
+      // 🔍 Extra Debug Output
+      if (
+        error.code?.includes("permission") ||
+        error.message?.includes("permission")
+      ) {
+        console.log(
+          "⚠️ Firestore permission denied during booking for UID:",
+          userId
+        );
+      }
+
+      Alert.alert("Error", "Failed to save appointment. Please try again.");
+    } finally {
+      setIsProcessing(false);
     }
   };
 
@@ -129,10 +167,7 @@ const PaymentScreen = ({ route, navigation }) => {
             )}
           </TouchableOpacity>
 
-          <TouchableOpacity
-            style={styles.qrBtn}
-            onPress={() => setShowQR(true)}
-          >
+          <TouchableOpacity style={styles.qrBtn} onPress={() => setShowQR(true)}>
             <Text style={styles.qrText}>Show QR Code Instead</Text>
           </TouchableOpacity>
         </>
@@ -156,10 +191,7 @@ const PaymentScreen = ({ route, navigation }) => {
             <Text style={styles.manualText}>✅ I’ve Paid — Confirm Appointment</Text>
           </TouchableOpacity>
 
-          <TouchableOpacity
-            style={styles.qrBackBtn}
-            onPress={() => setShowQR(false)}
-          >
+          <TouchableOpacity style={styles.qrBackBtn} onPress={() => setShowQR(false)}>
             <Text style={styles.qrBackText}>← Back</Text>
           </TouchableOpacity>
         </View>
@@ -175,6 +207,7 @@ const PaymentScreen = ({ route, navigation }) => {
   );
 };
 
+// 🎨 STYLES
 const styles = StyleSheet.create({
   container: {
     flex: 1,

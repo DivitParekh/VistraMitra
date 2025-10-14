@@ -19,11 +19,10 @@ const firebaseConfig = {
 
 const app = initializeApp(firebaseConfig);
 
-// ✅ Add correct async storage persistence here 👇
 const auth = initializeAuth(app, {
   persistence: getReactNativePersistence(AsyncStorage),
 });
 
 const db = getFirestore(app);
 
-export { auth, db };
+export { auth, db, app };
