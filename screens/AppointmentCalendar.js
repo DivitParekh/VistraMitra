@@ -64,92 +64,100 @@ const AppointmentCalendar = ({ navigation }) => {
 
   // 🔹 Confirm or Reject Appointment
   const updateStatus = async (id, newStatus, userId, appointment) => {
-  try {
-    if (!userId) {
-      Alert.alert("Error", "Cannot confirm — missing customer info.");
-      return;
-    }
-
-    // ✅ Confirm only: Create order + tasks
-    if (newStatus === "Confirmed") {
-      const orderId = id; // reuse appointment ID for linking
-
-      const orderData = {
-        orderId,
-        appointmentId: id,
-        userId,
-        customerName: appointment.fullName || "Customer",
-        styleCategory: appointment.styleCategory || "Custom Style",
-        styleImage: appointment.styleImage || null,
-        fabric: appointment.fabric || "Customer Fabric",
-        address: appointment.address || "",
-        date: appointment.date,
-        time: appointment.time,
-        totalCost: appointment.totalCost || 0,
-        advancePaid: appointment.advancePaid || 0,
-        balanceDue:
-          (appointment.totalCost || 0) - (appointment.advancePaid || 0),
-        paymentStatus: appointment.paymentStatus || "Advance Paid",
-        status: "Confirmed",
-        createdAt: serverTimestamp(),
-      };
-
-      // 🟢 Create in both paths
-      await setDoc(doc(db, "orders", orderId), orderData);
-      await setDoc(doc(db, "users", userId, "orders", orderId), orderData);
-
-      // 🧵 Default task creation
-      const stages = ["Cutting", "Stitching", "Handwork", "Packaging"];
-      for (const stage of stages) {
-        await addDoc(collection(db, "taskManager"), {
-          orderId,
-          userId,
-          customerName: appointment.fullName,
-          stage,
-          status: "Pending",
-          createdAt: serverTimestamp(),
-        });
+    try {
+      if (!userId) {
+        Alert.alert("Error", "Cannot confirm — missing customer info.");
+        return;
       }
+
+      // ✅ Confirm only: Create order + tasks
+      if (newStatus === "Confirmed") {
+        const orderId = id;
+
+        const orderData = {
+          orderId,
+          appointmentId: id,
+          userId,
+          customerName: appointment.fullName || "Customer",
+          styleCategory: appointment.styleCategory || "Custom Style",
+          styleImage: appointment.styleImage || null,
+          fabric: appointment.fabric || "Customer Fabric",
+          address: appointment.address || "",
+          date: appointment.date,
+          time: appointment.time,
+          totalCost: appointment.totalCost || 0,
+          advancePaid: appointment.advancePaid || 0,
+          balanceDue:
+            (appointment.totalCost || 0) - (appointment.advancePaid || 0),
+          paymentStatus: appointment.paymentStatus || "Advance Paid",
+          status: "Confirmed",
+          createdAt: serverTimestamp(),
+        };
+
+        // 🟢 Create order in Firestore
+        await setDoc(doc(db, "orders", orderId), orderData);
+        await setDoc(doc(db, "users", userId, "orders", orderId), orderData);
+
+        // 🧵 Create default task stages
+        const stages = ["Cutting", "Stitching", "Handwork", "Packaging"];
+        for (const stage of stages) {
+          await addDoc(collection(db, "taskManager"), {
+            orderId,
+            userId,
+            customerName: appointment.fullName,
+            stage,
+            status: "Pending",
+            createdAt: serverTimestamp(),
+          });
+        }
+
+        // 🔔 Auto-send payment reminder if delivery within 2 days
+        const today = new Date();
+        const deliveryDate = new Date(appointment.date);
+        const diffInDays = (deliveryDate - today) / (1000 * 60 * 60 * 24);
+
+        if (diffInDays <= 2 && !appointment.reminderSent) {
+          await sendFinalPaymentReminder(appointment);
+        }
+      }
+
+      // ✅ Update status globally
+      await setDoc(
+        doc(db, "tailorAppointments", id),
+        { ...appointment, status: newStatus },
+        { merge: true }
+      );
+      await setDoc(
+        doc(db, "appointments", userId, "userAppointments", id),
+        { ...appointment, status: newStatus },
+        { merge: true }
+      );
+
+      // 🔔 Send appointment status notification
+      await sendNotification(
+        userId,
+        newStatus === "Confirmed"
+          ? "Appointment Confirmed ✅"
+          : "Appointment Rejected ❌",
+        newStatus === "Confirmed"
+          ? `Your appointment on ${appointment.date} at ${appointment.time} has been confirmed.`
+          : `Sorry, your appointment on ${appointment.date} at ${appointment.time} was rejected.`
+      );
+
+      Alert.alert("Success", `Appointment marked as ${newStatus}`);
+    } catch (err) {
+      console.error("Error updating status:", err);
+      Alert.alert("Error", "Could not update appointment status");
     }
+  };
 
-    // ✅ Update appointment status globally
-    await setDoc(
-      doc(db, "tailorAppointments", id),
-      { ...appointment, status: newStatus },
-      { merge: true }
-    );
-    await setDoc(
-      doc(db, "appointments", userId, "userAppointments", id),
-      { ...appointment, status: newStatus },
-      { merge: true }
-    );
-
-    // 🔔 Send notification
-    await sendNotification(
-      userId,
-      newStatus === "Confirmed"
-        ? "Appointment Confirmed ✅"
-        : "Appointment Rejected ❌",
-      newStatus === "Confirmed"
-        ? `Your appointment on ${appointment.date} at ${appointment.time} has been confirmed.`
-        : `Sorry, your appointment on ${appointment.date} at ${appointment.time} was rejected.`
-    );
-
-    Alert.alert("Success", `Appointment marked as ${newStatus}`);
-  } catch (err) {
-    console.error("Error updating status:", err);
-    Alert.alert("Error", "Could not update appointment status");
-  }
-};
-
-
-  // 🚀 NEW: Send Final Payment Reminder
+  // 🚀 Auto Final Payment Reminder
   const sendFinalPaymentReminder = async (appointment) => {
     try {
       const { userId, id, totalCost, advancePaid } = appointment;
 
-      const link = `vastramitra://finalpayment?appointmentId=${id}&userId=${userId}`;
       const remaining = (Number(totalCost) || 0) - (Number(advancePaid) || 0);
+      const link = `vastramitra://finalpayment?appointmentId=${id}&userId=${userId}`;
 
       await sendNotification(
         userId,
@@ -158,16 +166,14 @@ const AppointmentCalendar = ({ navigation }) => {
         link
       );
 
-      // Update Firestore that reminder sent
       await updateDoc(doc(db, "appointments", userId, "userAppointments", id), {
         reminderSent: true,
         deliveryStatus: "Ready for Delivery",
       });
 
-      Alert.alert("✅ Reminder Sent", "Customer notified to pay the remaining balance.");
+      console.log(`✅ Auto reminder sent for ${appointment.fullName}`);
     } catch (error) {
       console.error("Reminder Error:", error);
-      Alert.alert("Error", "Failed to send payment reminder.");
     }
   };
 
@@ -212,9 +218,6 @@ const AppointmentCalendar = ({ navigation }) => {
           arrowColor: '#5DA3FA',
           monthTextColor: '#2c3e50',
           textMonthFontWeight: 'bold',
-          textDayFontSize: 14,
-          textMonthFontSize: 16,
-          textDayHeaderFontSize: 13,
         }}
       />
 
@@ -228,10 +231,7 @@ const AppointmentCalendar = ({ navigation }) => {
 
           {filteredAppointments.map((item) => (
             <View key={item.id} style={styles.card}>
-              <Text style={styles.cardText}>
-                <Ionicons name="calendar" size={16} /> {item.date} —{' '}
-                <Ionicons name="time-outline" size={16} /> {item.time}
-              </Text>
+              <Text style={styles.cardText}>📅 {item.date} — 🕒 {item.time}</Text>
               <Text style={styles.cardText}>👤 {item.fullName}</Text>
               <Text style={styles.cardText}>📞 {item.phone}</Text>
               <Text style={styles.cardText}>📌 Fabric: {item.fabric || 'N/A'}</Text>
@@ -243,7 +243,6 @@ const AppointmentCalendar = ({ navigation }) => {
                 />
               )}
 
-              {/* 💰 Payment Badge */}
               <View
                 style={[
                   styles.paymentBadge,
@@ -254,23 +253,11 @@ const AppointmentCalendar = ({ navigation }) => {
                     : styles.pendingPay,
                 ]}
               >
-                <Ionicons
-                  name={
-                    item.paymentStatus === 'Advance Paid'
-                      ? 'cash-outline'
-                      : item.paymentStatus === 'Full Paid'
-                      ? 'checkmark-done'
-                      : 'alert-circle-outline'
-                  }
-                  size={14}
-                  color="#fff"
-                />
                 <Text style={styles.paymentText}>
                   {item.paymentStatus || 'Pending Payment'}
                 </Text>
               </View>
 
-              {/* 🟢 Status Badge */}
               <Text
                 style={[
                   styles.statusBadge,
@@ -284,7 +271,6 @@ const AppointmentCalendar = ({ navigation }) => {
                 {item.status}
               </Text>
 
-              {/* 🔘 Confirm / Reject Buttons */}
               {item.status === 'Pending' && (
                 <View style={styles.buttonRow}>
                   <TouchableOpacity
@@ -302,26 +288,14 @@ const AppointmentCalendar = ({ navigation }) => {
                 </View>
               )}
 
-              {/* 💳 View Payment & Reminder Button */}
               {item.status === 'Confirmed' && (
-                <View>
-                  <TouchableOpacity
-                    style={styles.paymentBtn}
-                    onPress={() => navigation.navigate('PaymentTailorScreen')}
-                  >
-                    <Ionicons name="wallet-outline" size={16} color="#fff" />
-                    <Text style={styles.paymentBtnText}>View Payment</Text>
-                  </TouchableOpacity>
-
-                  {/* 🚀 Send Payment Reminder */}
-                  <TouchableOpacity
-                    style={[styles.paymentBtn, { backgroundColor: '#f39c12', marginTop: 8 }]}
-                    onPress={() => sendFinalPaymentReminder(item)}
-                  >
-                    <Ionicons name="notifications-outline" size={16} color="#fff" />
-                    <Text style={styles.paymentBtnText}>Send Final Payment Reminder</Text>
-                  </TouchableOpacity>
-                </View>
+                <TouchableOpacity
+                  style={styles.paymentBtn}
+                  onPress={() => navigation.navigate('PaymentTailorScreen')}
+                >
+                  <Ionicons name="wallet-outline" size={16} color="#fff" />
+                  <Text style={styles.paymentBtnText}>View Payment</Text>
+                </TouchableOpacity>
               )}
             </View>
           ))}
@@ -354,15 +328,13 @@ const styles = StyleSheet.create({
   },
   cardText: { fontSize: 14, color: '#34495e', marginBottom: 6 },
   paymentBadge: {
-    flexDirection: 'row',
-    alignItems: 'center',
     alignSelf: 'flex-start',
     paddingHorizontal: 10,
     paddingVertical: 4,
     borderRadius: 12,
     marginTop: 4,
   },
-  paymentText: { color: '#fff', fontSize: 12, fontWeight: '600', marginLeft: 5 },
+  paymentText: { color: '#fff', fontSize: 12, fontWeight: '600' },
   paid: { backgroundColor: '#27ae60' },
   fullPaid: { backgroundColor: '#2ecc71' },
   pendingPay: { backgroundColor: '#f39c12' },
@@ -371,9 +343,9 @@ const styles = StyleSheet.create({
     paddingHorizontal: 8,
     paddingVertical: 2,
     borderRadius: 12,
-    overflow: 'hidden',
     marginTop: 6,
     fontSize: 12,
+    alignSelf: 'flex-start',
   },
   pending: { backgroundColor: '#fce4b3', color: '#e67e22' },
   confirmed: { backgroundColor: '#d4edda', color: '#27ae60' },
