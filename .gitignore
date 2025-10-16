@@ -1,37 +1,60 @@
-# Learn more https://docs.github.com/en/get-started/getting-started-with-git/ignoring-files
+# 🧠 Learn more: https://docs.github.com/en/get-started/getting-started-with-git/ignoring-files
 
-# dependencies
+# 📦 Dependencies
 node_modules/
 
-# Expo
+# 🚀 Expo & EAS
 .expo/
+.expo-shared/
 dist/
 web-build/
+build/
+eas-output/
+eas-cache/
 expo-env.d.ts
+eas.json
 
-# Native
-.kotlin/
+# 🧱 Native builds (Android/iOS)
+android/.gradle/
+android/app/build/
+android/build/
+ios/build/
+ios/Pods/
+ios/DerivedData/
 *.orig.*
 *.jks
+*.keystore
 *.p8
 *.p12
 *.key
 *.mobileprovision
 
-# Metro
-.metro-health-check*
+# 🔥 Local assets (large or dynamic files)
+assets/catalog/*
+assets/uploads/*
+assets/temp/*
+assets/.DS_Store
 
-# debug
+# 🧰 IDE / Tools
+.vscode/
+.idea/
+*.iml
+
+# 🧪 Metro / Debug
+.metro-health-check*
 npm-debug.*
 yarn-debug.*
 yarn-error.*
 
-# macOS
+# 🍏 macOS / Windows temp files
 .DS_Store
-*.pem
+Thumbs.db
 
-# local env files
+# 🔒 Environment & Firebase credentials
+.env
 .env*.local
+google-services.json
+GoogleService-Info.plist
 
-# typescript
+# 🧩 TypeScript cache
 *.tsbuildinfo

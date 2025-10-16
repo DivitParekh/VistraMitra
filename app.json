@@ -7,18 +7,15 @@
     "icon": "./assets/logo.jpg",
     "userInterfaceStyle": "light",
     "newArchEnabled": true,
-
     "splash": {
       "image": "./assets/logo.jpg",
       "resizeMode": "contain",
       "backgroundColor": "#ffffff"
     },
-
     "ios": {
       "supportsTablet": true,
       "bundleIdentifier": "com.vastramitra.app"
     },
-
     "android": {
       "package": "com.vastramitra.app",
       "googleServicesFile": "./google-services.json",
@@ -30,21 +27,14 @@
       "useNextNotificationsApi": true,
       "edgeToEdgeEnabled": true
     },
-
     "scheme": "vastramitra",
-    
     "web": {
       "favicon": "./assets/logo.jpg"
     },
-
     "plugins": [
       "expo-web-browser"
     ],
-
     "extra": {
-      "eas": {
-        "projectId": "d0852d6c-c7c2-4515-a3cd-68f62d12873b"
-      },
       "firebase": {
         "apiKey": "AIzaSyCJvI8iOqG5y03LjiWoOJmjwlRdw0WHJJ0",
         "authDomain": "vastramitra-b1cd0.firebaseapp.com",
@@ -56,7 +46,11 @@
       "googleSignIn": {
         "androidClientId": "982643274182-2puitccul5dud1fqjsf34ak8oibpgba9.apps.googleusercontent.com",
         "expoClientId": "982643274182-80ee4jmmhsi0v0ov9o31nvsn19n4fvh2.apps.googleusercontent.com"
+      },
+      "eas": {
+        "projectId": "13331270-3caa-4e2f-80f2-aecb134841c4"
       }
-    }
+    },
+    "owner": "divitparekh"
   }
 }

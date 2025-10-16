@@ -1,17 +1,22 @@
-import React, { useEffect, useState } from 'react';
+import React, { useEffect, useState } from "react";
 import {
   View,
   Text,
   StyleSheet,
-  ScrollView,
   TouchableOpacity,
+  ScrollView,
   ActivityIndicator,
-} from 'react-native';
-import { Ionicons, FontAwesome5, MaterialCommunityIcons } from '@expo/vector-icons';
-import { collection, getDocs, query, where, onSnapshot } from 'firebase/firestore';
-import { SafeAreaView } from 'react-native-safe-area-context';
-import { db, auth } from '../firebase/firebaseConfig';
-import { LinearGradient } from 'expo-linear-gradient';
+  Alert,
+} from "react-native";
+import {
+  Ionicons,
+  MaterialCommunityIcons,
+  FontAwesome5,
+} from "@expo/vector-icons";
+import { collection, getDocs, query, where, onSnapshot } from "firebase/firestore";
+import { SafeAreaView } from "react-native-safe-area-context";
+import { db, auth } from "../firebase/firebaseConfig";
+import { LinearGradient } from "expo-linear-gradient";
 
 const TailorScreen = ({ navigation }) => {
   const [ordersCount, setOrdersCount] = useState(0);
@@ -24,8 +29,7 @@ const TailorScreen = ({ navigation }) => {
     const fetchDashboard = async () => {
       try {
         if (!auth.currentUser) return;
-
-        const ordersSnapshot = await getDocs(collection(db, 'orders'));
+        const ordersSnapshot = await getDocs(collection(db, "orders"));
         let totalSales = 0;
         ordersSnapshot.forEach((doc) => {
           const data = doc.data();
@@ -35,12 +39,12 @@ const TailorScreen = ({ navigation }) => {
         setOrdersCount(ordersSnapshot.size);
         setSales(totalSales);
 
-        const apptSnapshot = await getDocs(collection(db, 'tailorAppointments'));
+        const apptSnapshot = await getDocs(collection(db, "tailorAppointments"));
         setAppointmentsCount(apptSnapshot.size);
 
         setLoading(false);
       } catch (error) {
-        console.error('Error fetching dashboard:', error);
+        console.error("Error fetching dashboard:", error);
         setLoading(false);
       }
     };
@@ -50,8 +54,8 @@ const TailorScreen = ({ navigation }) => {
   useEffect(() => {
     if (!auth.currentUser) return;
     const q = query(
-      collection(db, 'notifications', auth.currentUser.uid, 'userNotifications'),
-      where('read', '==', false)
+      collection(db, "notifications", auth.currentUser.uid, "userNotifications"),
+      where("read", "==", false)
     );
     const unsubscribe = onSnapshot(q, (snapshot) => setUnreadCount(snapshot.size));
     return () => unsubscribe();
@@ -60,35 +64,61 @@ const TailorScreen = ({ navigation }) => {
   return (
     <SafeAreaView style={styles.container}>
       {/* Header */}
-      <LinearGradient colors={['#E3F2FD', '#BBDEFB']} style={styles.headerBox}>
-        <View style={styles.headerContent}>
-          <View>
-            <Text style={styles.header}>Hello, Tailor 👋</Text>
-            <Text style={styles.subheader}>Your Smart Dashboard</Text>
-          </View>
+      <LinearGradient colors={["#3F51B5", "#5C6BC0"]} style={styles.headerBox}>
+        <Text style={styles.header}>VastraMitra</Text>
+        <Text style={styles.subheader}>Tailor Dashboard</Text>
 
-          <TouchableOpacity
-            style={styles.notificationIcon}
-            onPress={() => navigation.navigate('Notifications')}>
-            <Ionicons name="notifications-outline" size={22} color="#1E88E5" />
-            {unreadCount > 0 && (
-              <View style={styles.badge}>
-                <Text style={styles.badgeText}>
-                  {unreadCount > 9 ? '9+' : unreadCount}
-                </Text>
-              </View>
-            )}
-          </TouchableOpacity>
-        </View>
+        <TouchableOpacity
+          style={styles.notificationIcon}
+          onPress={() => {
+            if (!auth.currentUser) {
+              Alert.alert("Please Log In", "You must be logged in to view notifications.");
+              return;
+            }
+            navigation.navigate("Notifications");
+          }}
+        >
+          <Ionicons name="notifications-outline" size={22} color="#FFFFFF" />
+          {unreadCount > 0 && (
+            <View style={styles.badge}>
+              <Text style={styles.badgeText}>
+                {unreadCount > 9 ? "9+" : unreadCount}
+              </Text>
+            </View>
+          )}
+        </TouchableOpacity>
       </LinearGradient>
 
-      <ScrollView contentContainerStyle={styles.scrollContent}>
+      {/* Scrollable Content */}
+      <ScrollView
+        contentContainerStyle={styles.menuContainer}
+        showsVerticalScrollIndicator={false}
+      >
+        <TouchableOpacity
+          style={styles.promoCard}
+          onPress={() => navigation.navigate("OrderManagement")}
+        >
+          <LinearGradient
+            colors={["#E8EAF6", "#FFFFFF"]}
+            style={styles.promoGradient}
+          >
+            <Text style={styles.promoText}>🧵 Manage Your Orders Seamlessly</Text>
+            <Text style={styles.promoSub}>
+              Track progress, handle payments & keep clients happy!
+            </Text>
+          </LinearGradient>
+        </TouchableOpacity>
+
         {loading ? (
-          <ActivityIndicator size="large" color="#1E88E5" style={{ marginTop: 20 }} />
+          <ActivityIndicator
+            size="large"
+            color="#3F51B5"
+            style={{ marginTop: 30 }}
+          />
         ) : (
           <View style={styles.statsContainer}>
             <View style={styles.statsCard}>
-              <Ionicons name="clipboard-outline" size={30} color="#1E88E5" />
+              <Ionicons name="clipboard-outline" size={30} color="#3F51B5" />
               <Text style={styles.statsValue}>{ordersCount}</Text>
               <Text style={styles.statsLabel}>Total Orders</Text>
             </View>
@@ -98,7 +128,7 @@ const TailorScreen = ({ navigation }) => {
               <Text style={styles.statsLabel}>Appointments</Text>
             </View>
             <View style={styles.statsCard}>
-              <FontAwesome5 name="rupee-sign" size={26} color="#1565C0" />
+              <FontAwesome5 name="rupee-sign" size={24} color="#1E88E5" />
               <Text style={styles.statsValue}>₹{sales}</Text>
               <Text style={styles.statsLabel}>Total Sales</Text>
             </View>
@@ -109,73 +139,65 @@ const TailorScreen = ({ navigation }) => {
         <View style={styles.row}>
           <TouchableOpacity
             style={styles.card}
-            onPress={() => navigation.navigate('AppointmentCalendar')}>
+            onPress={() => navigation.navigate("AppointmentCalendar")}
+          >
             <Ionicons name="calendar-outline" size={28} color="#1E88E5" />
             <Text style={styles.cardText}>Appointments</Text>
           </TouchableOpacity>
 
           <TouchableOpacity
             style={styles.card}
-            onPress={() => navigation.navigate('TailorTaskManager')}>
-            <FontAwesome5 name="tasks" size={26} color="#1976D2" />
-            <Text style={styles.cardText}>Task Manager</Text>
-          </TouchableOpacity>
-        </View>
-
-        <View style={styles.row}>
-          <TouchableOpacity
-            style={styles.card}
-            onPress={() => navigation.navigate('PaymentTailorScreen')}>
+            onPress={() => navigation.navigate("PaymentTailorScreen")}
+          >
             <FontAwesome5 name="wallet" size={24} color="#1E88E5" />
             <Text style={styles.cardText}>Payments</Text>
           </TouchableOpacity>
-
-          <TouchableOpacity
-            style={styles.card}
-            onPress={() => navigation.navigate('OrderManagement')}>
-            <Ionicons name="clipboard-outline" size={26} color="#1565C0" />
-            <Text style={styles.cardText}>Order Management</Text>
-          </TouchableOpacity>
         </View>
 
         <View style={styles.row}>
           <TouchableOpacity
             style={styles.card}
-            onPress={() => navigation.navigate('TailorChatListScreen')}>
-            <Ionicons name="chatbubbles-outline" size={28} color="#1E88E5" />
-            <Text style={styles.cardText}>Customer Chats</Text>
+            onPress={() => navigation.navigate("OrderManagement")}
+          >
+            <Ionicons name="clipboard-outline" size={26} color="#1565C0" />
+            <Text style={styles.cardText}>Order Management</Text>
           </TouchableOpacity>
 
           <TouchableOpacity
             style={styles.card}
-            onPress={() => navigation.navigate('TailorMeasurementBook')}>
-            <MaterialCommunityIcons name="tape-measure" size={30} color="#1976D2" />
+            onPress={() => navigation.navigate("TailorMeasurementBook")}
+          >
+            <MaterialCommunityIcons
+              name="tape-measure"
+              size={30}
+              color="#1976D2"
+            />
             <Text style={styles.cardText}>Measurements</Text>
           </TouchableOpacity>
         </View>
 
-        <View style={{ height: 100 }} />
+        <View style={{ height: 110 }} />
       </ScrollView>
 
-      {/* Bottom Navbar */}
-      <LinearGradient colors={['#E3F2FD', '#BBDEFB']} style={styles.bottomNav}>
-        <TouchableOpacity onPress={() => navigation.navigate('TailorScreen')}>
+      {/* Keep Bottom Navbar same */}
+      <LinearGradient colors={["#E3F2FD", "#BBDEFB"]} style={styles.bottomNav}>
+        <TouchableOpacity onPress={() => navigation.navigate("TailorScreen")}>
           <Ionicons name="home-outline" size={24} color="#1E88E5" />
           <Text style={styles.navText}>Home</Text>
         </TouchableOpacity>
-        <TouchableOpacity onPress={() => navigation.navigate('TailorTaskManager')}>
+        <TouchableOpacity onPress={() => navigation.navigate("TailorTaskManager")}>
           <Ionicons name="clipboard-outline" size={24} color="#1E88E5" />
           <Text style={styles.navText}>Tasks</Text>
         </TouchableOpacity>
-        <TouchableOpacity onPress={() => navigation.navigate('TailorChatListScreen')}>
+        <TouchableOpacity onPress={() => navigation.navigate("TailorChatListScreen")}>
           <Ionicons name="chatbubble-ellipses-outline" size={24} color="#1E88E5" />
           <Text style={styles.navText}>Chats</Text>
         </TouchableOpacity>
-        <TouchableOpacity onPress={() => navigation.navigate('CustomerList')}>
+        <TouchableOpacity onPress={() => navigation.navigate("CustomerList")}>
           <Ionicons name="people-outline" size={24} color="#1E88E5" />
           <Text style={styles.navText}>Customers</Text>
         </TouchableOpacity>
-        <TouchableOpacity onPress={() => navigation.navigate('ProfileScreen')}>
+        <TouchableOpacity onPress={() => navigation.navigate("ProfileScreen")}>
           <Ionicons name="person-circle-outline" size={24} color="#1E88E5" />
           <Text style={styles.navText}>Profile</Text>
         </TouchableOpacity>
@@ -185,81 +207,112 @@ const TailorScreen = ({ navigation }) => {
 };
 
 const styles = StyleSheet.create({
-  container: { flex: 1, backgroundColor: '#F9FAFB' },
-  scrollContent: { padding: 16, paddingBottom: 120 },
+  container: { flex: 1, backgroundColor: "#FAFAFA" },
   headerBox: {
+    padding: 26,
+    paddingTop: 50,
     borderBottomLeftRadius: 30,
     borderBottomRightRadius: 30,
-    paddingVertical: 35,
-    paddingHorizontal: 24,
-    elevation: 6,
+    alignItems: "center",
+    elevation: 4,
   },
-  headerContent: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'center',
+  header: {
+    fontSize: 26,
+    fontWeight: "800",
+    color: "#FFFFFF",
+    letterSpacing: 0.5,
   },
-  header: { fontSize: 22, fontWeight: '800', color: '#0D47A1' },
-  subheader: { fontSize: 14, color: '#1565C0', marginTop: 4 },
+  subheader: { fontSize: 14, color: "#E8EAF6", marginTop: 6, opacity: 0.9 },
   notificationIcon: {
-    backgroundColor: '#E3F2FD',
+    position: "absolute",
+    top: 52,
+    right: 22,
+    backgroundColor: "#3F51B5",
     padding: 8,
     borderRadius: 20,
-    elevation: 2,
+    elevation: 3,
   },
   badge: {
-    position: 'absolute',
+    position: "absolute",
     top: -3,
     right: -3,
-    backgroundColor: '#1976D2',
-    borderRadius: 8,
+    backgroundColor: "#B00020",
+    borderRadius: 10,
     paddingHorizontal: 4,
     paddingVertical: 1,
+    minWidth: 18,
+    alignItems: "center",
+    justifyContent: "center",
   },
-  badgeText: { color: '#fff', fontSize: 10, fontWeight: 'bold' },
+  badgeText: { color: "#FFFFFF", fontSize: 10, fontWeight: "800" },
+  menuContainer: { padding: 20, paddingBottom: 120 },
+  promoCard: { borderRadius: 18, marginBottom: 24, elevation: 3 },
+  promoGradient: { padding: 20, borderRadius: 18 },
+  promoText: { fontSize: 18, fontWeight: "700", color: "#000000" },
+  promoSub: { fontSize: 13, color: "#424242", marginTop: 6, opacity: 0.8 },
   statsContainer: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    marginTop: 20,
+    flexDirection: "row",
+    justifyContent: "space-between",
+    marginBottom: 24,
   },
   statsCard: {
-    backgroundColor: '#fff',
+    backgroundColor: "#FFFFFF",
     flex: 1,
-    marginHorizontal: 5,
     borderRadius: 18,
-    alignItems: 'center',
-    paddingVertical: 18,
+    marginHorizontal: 6,
+    alignItems: "center",
+    paddingVertical: 20,
     elevation: 3,
-    shadowColor: 'rgba(0,0,0,0.08)',
+    shadowColor: "rgba(0,0,0,0.08)",
   },
-  statsValue: { fontSize: 18, fontWeight: '700', color: '#1E88E5', marginTop: 6 },
-  statsLabel: { fontSize: 12, color: '#555', marginTop: 3 },
-  sectionTitle: { fontSize: 16, fontWeight: '700', color: '#1E88E5', marginTop: 30, marginBottom: 10 },
-  row: { flexDirection: 'row', justifyContent: 'space-between', marginBottom: 16 },
+  statsValue: {
+    fontSize: 18,
+    fontWeight: "700",
+    color: "#1E88E5",
+    marginTop: 6,
+  },
+  statsLabel: { fontSize: 13, color: "#555", marginTop: 3 },
+  sectionTitle: {
+    fontSize: 16,
+    fontWeight: "700",
+    color: "#1E88E5",
+    marginTop: 20,
+    marginBottom: 12,
+  },
+  row: {
+    flexDirection: "row",
+    justifyContent: "space-between",
+    marginBottom: 18,
+  },
   card: {
-    backgroundColor: '#fff',
-    width: '48%',
+    backgroundColor: "#FFFFFF",
+    width: "48%",
     borderRadius: 18,
     paddingVertical: 22,
-    alignItems: 'center',
+    alignItems: "center",
     elevation: 3,
-    shadowColor: 'rgba(0,0,0,0.08)',
+    shadowColor: "rgba(0,0,0,0.08)",
   },
-  cardText: { fontSize: 14, marginTop: 8, fontWeight: '600', color: '#212121' },
+  cardText: { fontSize: 14, marginTop: 8, fontWeight: "600", color: "#000" },
   bottomNav: {
-    flexDirection: 'row',
-    justifyContent: 'space-around',
-    alignItems: 'center',
+    flexDirection: "row",
+    justifyContent: "space-around",
+    alignItems: "center",
     paddingVertical: 10,
     borderTopLeftRadius: 25,
     borderTopRightRadius: 25,
-    position: 'absolute',
+    position: "absolute",
     bottom: 0,
     left: 0,
     right: 0,
     elevation: 8,
   },
-  navText: { fontSize: 11, color: '#1E88E5', textAlign: 'center', marginTop: 2 },
+  navText: {
+    fontSize: 11,
+    color: "#1E88E5",
+    textAlign: "center",
+    marginTop: 2,
+  },
 });
 
 export default TailorScreen;

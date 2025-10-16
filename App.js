@@ -4,11 +4,13 @@ import { NavigationContainer } from '@react-navigation/native';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import AppNavigator from './navigation/AppNavigator';
 
-// 🚀 Notifications
+
+
 import * as Notifications from 'expo-notifications';
-import { registerForPushNotificationsAsync } from './NotificationHandler';
+import { registerForPushNotificationsAsync } from './utils/notificationSetup.js'; // ✅ fixed correct path
 import Toast from 'react-native-toast-message';
 import { showInAppNotification } from './utils/ToastHandler';
+
 
 // 🔐 Firebase
 import { auth, db } from './firebase/firebaseConfig';
@@ -54,24 +56,25 @@ const App = () => {
   // 🔔 Register push notifications + handle listeners
   useEffect(() => {
     const setupPushNotifications = async () => {
-      const token = await registerForPushNotificationsAsync();
-      if (token) {
-        if (auth.currentUser) {
-          try {
-            await setDoc(
-              doc(db, 'users', auth.currentUser.uid),
-              { expoPushToken: token },
-              { merge: true }
-            );
-            console.log('📱 Push token saved to Firestore');
-          } catch (err) {
-            console.log('Error saving push token:', err);
-          }
-        } else {
-          console.log('⚠️ No user logged in, token not saved yet');
+      try {
+        if (!auth.currentUser) {
+          console.log('⚠️ No user logged in yet, skipping token registration.');
+          return;
         }
-      } else {
-        console.log('⚠️ Expo Go limitation: push tokens unavailable. Use dev build later.');
+
+        const token = await registerForPushNotificationsAsync(auth.currentUser.uid); // ✅ pass userId
+        if (token) {
+          await setDoc(
+            doc(db, 'users', auth.currentUser.uid),
+            { expoPushToken: token },
+            { merge: true }
+          );
+          console.log('📱 Push token saved to Firestore');
+        } else {
+          console.log('⚠️ Expo Go limitation: push tokens unavailable. Use dev build later.');
+        }
+      } catch (err) {
+        console.log('🔴 Error setting up push notifications:', err);
       }
     };
 
@@ -81,10 +84,10 @@ const App = () => {
     const notificationListener = Notifications.addNotificationReceivedListener((notification) => {
       const title = notification.request.content.title || 'New Notification';
       const body = notification.request.content.body || '';
-      showInAppNotification(title, body); // ✅ show banner instantly
+      showInAppNotification(title, body); // ✅ show toast banner instantly
     });
 
-    // 🧭 User tapped a notification (background/closed)
+    // 🧭 Handle user tapping a notification (background/closed)
     const responseListener = Notifications.addNotificationResponseReceivedListener((response) => {
       const data = response.notification.request.content.data;
       if (data?.screen && navigationRef.current) {

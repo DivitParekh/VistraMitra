@@ -1,48 +1,48 @@
 import { addDoc, collection, serverTimestamp, doc, getDoc } from 'firebase/firestore';
-import { db } from '../firebase/firebaseConfig';
+import { db, auth } from '../firebase/firebaseConfig';
 
 /**
- * Send real-time push notification + save in Firestore + navigation deep link
- * @param {string} userId - UID of the recipient
- * @param {string} title - Notification title
- * @param {string} message - Body text of notification
- * @param {object} data - Optional data (for navigation, deep links, etc.)
+ * Send push + in-app notification
+ * Works for:
+ *  ✅ Customer → Tailor
+ *  ✅ Tailor → Customer
  */
 export async function sendNotification(userId, title, message, data = {}) {
   try {
-    if (!userId || !title || !message) {
-      console.error('❌ Missing parameters for notification');
+    const sender = auth.currentUser?.uid;
+    if (!sender) {
+      console.warn('🚫 No logged-in user found.');
       return;
     }
 
-    // ✅ Save to Firestore for in-app notifications
+    // ✅ Store in Firestore (for in-app notifications)
     await addDoc(collection(db, 'notifications', userId, 'userNotifications'), {
       title,
       message,
       timestamp: serverTimestamp(),
       read: false,
+      senderId: sender,
       ...data,
     });
 
-    // ✅ Fetch user’s Expo push token
+    // ✅ Fetch recipient’s Expo push token
     const userDoc = await getDoc(doc(db, 'users', userId));
-    const userToken = userDoc.exists() ? userDoc.data().expoPushToken : null;
+    const token = userDoc.exists() ? userDoc.data().expoPushToken : null;
 
-    if (!userToken) {
-      console.warn(`⚠️ No Expo push token found for user: ${userId}`);
+    if (!token) {
+      console.warn(`⚠️ No push token for recipient ${userId}`);
       return;
     }
 
-    // ✅ Create push message payload
-    const pushMessage = {
-      to: userToken,
+    // ✅ Send via Expo push API
+    const payload = {
+      to: token,
       sound: 'default',
       title,
       body: message,
-      data, // includes { screen: 'ChatScreen', params: {...} }
+      data,
     };
 
-    // ✅ Send notification via Expo Push API using fetch()
     const response = await fetch('https://exp.host/--/api/v2/push/send', {
       method: 'POST',
       headers: {
@@ -50,7 +50,7 @@ export async function sendNotification(userId, title, message, data = {}) {
         'Accept-encoding': 'gzip, deflate',
         'Content-Type': 'application/json',
       },
-      body: JSON.stringify(pushMessage),
+      body: JSON.stringify(payload),
     });
 
     const result = await response.json();

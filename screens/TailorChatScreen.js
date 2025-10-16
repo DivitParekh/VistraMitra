@@ -20,7 +20,7 @@ import {
   doc,
   getDoc,
   setDoc,
-  serverTimestamp
+  serverTimestamp,
 } from 'firebase/firestore';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { db } from '../firebase/firebaseConfig';
@@ -64,7 +64,7 @@ const TailorChatScreen = ({ route }) => {
     );
 
     const unsubscribe = onSnapshot(q, (snapshot) => {
-      const msgs = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
+      const msgs = snapshot.docs.map((doc) => ({ id: doc.id, ...doc.data() }));
       setMessages(msgs);
       scrollToBottom();
     });
@@ -81,10 +81,14 @@ const TailorChatScreen = ({ route }) => {
       createdAt: serverTimestamp(),
     });
 
-    await setDoc(doc(db, 'chats', chatId), {
-      lastMessage: input,
-      lastUpdated: serverTimestamp(),
-    }, { merge: true });
+    await setDoc(
+      doc(db, 'chats', chatId),
+      {
+        lastMessage: input,
+        lastUpdated: serverTimestamp(),
+      },
+      { merge: true }
+    );
 
     setInput('');
   };
@@ -96,88 +100,113 @@ const TailorChatScreen = ({ route }) => {
   };
 
   return (
-    <KeyboardAvoidingView
-      style={{ flex: 1 }}
-      behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
-      keyboardVerticalOffset={Platform.OS === 'ios' ? 60 : 0}
-    >
-      <TouchableWithoutFeedback onPress={Keyboard.dismiss}>
-        <View style={styles.container}>
-          <FlatList
-            ref={flatListRef}
-            data={messages}
-            keyExtractor={item => item.id}
-            renderItem={({ item }) => (
-              <View style={[
-                styles.bubble,
-                item.senderId === 'tailor' ? styles.sent : styles.received
-              ]}>
-                <Text>{item.message}</Text>
-              </View>
-            )}
-          />
-          <View style={styles.inputContainer}>
-            <TextInput
-              value={input}
-              onChangeText={setInput}
-              placeholder="Type a message..."
-              style={styles.input}
-              multiline
+    <SafeAreaView style={styles.safeArea}>
+      <KeyboardAvoidingView
+        style={{ flex: 1 }}
+        behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
+        keyboardVerticalOffset={Platform.OS === 'ios' ? 70 : 0}>
+        <TouchableWithoutFeedback onPress={Keyboard.dismiss}>
+          <View style={styles.container}>
+            <FlatList
+              ref={flatListRef}
+              data={messages}
+              keyExtractor={(item) => item.id}
+              renderItem={({ item }) => (
+                <View
+                  style={[
+                    styles.messageBubble,
+                    item.senderId === 'tailor' ? styles.sent : styles.received,
+                  ]}>
+                  <Text style={styles.messageText}>{item.message}</Text>
+                </View>
+              )}
+              contentContainerStyle={styles.chatContainer}
+              showsVerticalScrollIndicator={false}
             />
-            <TouchableOpacity onPress={sendMessage}>
-              <Ionicons name="send" size={24} color="#2196F3" />
-            </TouchableOpacity>
+
+            <View style={styles.inputContainer}>
+              <TextInput
+                value={input}
+                onChangeText={setInput}
+                placeholder="Type a message..."
+                style={styles.input}
+                multiline
+                placeholderTextColor="#999"
+              />
+              <TouchableOpacity onPress={sendMessage} activeOpacity={0.7}>
+                <Ionicons name="send" size={26} color="#4C84FF" />
+              </TouchableOpacity>
+            </View>
           </View>
-        </View>
-      </TouchableWithoutFeedback>
-    </KeyboardAvoidingView>
+        </TouchableWithoutFeedback>
+      </KeyboardAvoidingView>
+    </SafeAreaView>
   );
 };
 
 const styles = StyleSheet.create({
-  container: { flex: 1, padding: 10 },
-  bubble: {
-    padding: 12,
-    marginVertical: 6,
-    borderRadius: 12,
+  safeArea: { flex: 1, backgroundColor: '#f7f9fc' },
+  container: {
+    flex: 1,
+    paddingHorizontal: 12,
+    backgroundColor: '#f7f9fc',
+  },
+  chatContainer: {
+    paddingVertical: 10,
+  },
+  messageBubble: {
     maxWidth: '75%',
+    paddingVertical: 10,
+    paddingHorizontal: 14,
+    marginVertical: 6,
+    borderRadius: 18,
+    elevation: 1,
   },
   sent: {
-    backgroundColor: '#DCF8C6',
+    backgroundColor: '#4C84FF20',
     alignSelf: 'flex-end',
+    borderTopRightRadius: 4,
   },
   received: {
-    backgroundColor: '#eee',
+    backgroundColor: '#ffffff',
     alignSelf: 'flex-start',
+    borderTopLeftRadius: 4,
+    borderWidth: 1,
+    borderColor: '#E5E7EB',
+  },
+  messageText: {
+    fontSize: 15,
+    color: '#1f2937',
+    lineHeight: 20,
   },
   inputContainer: {
     flexDirection: 'row',
-    borderTopWidth: 1,
-    borderColor: '#ddd',
     alignItems: 'center',
-    paddingHorizontal: 10,
-    paddingVertical: 6,
     backgroundColor: '#fff',
+    paddingHorizontal: 14,
+    paddingVertical: 8,
+    borderRadius: 30,
+    marginBottom: 8,
+    marginHorizontal: 6,
+    shadowColor: '#000',
+    shadowOpacity: 0.06,
+    shadowOffset: { width: 0, height: 3 },
+    shadowRadius: 4,
+    elevation: 3,
   },
   input: {
     flex: 1,
-    backgroundColor: '#f0f0f0',
+    fontSize: 15,
+    color: '#1f2937',
+    backgroundColor: '#f1f5f9',
     borderRadius: 20,
-    paddingHorizontal: 16,
     paddingVertical: 8,
+    paddingHorizontal: 16,
     marginRight: 10,
-    maxHeight: 100,
+    maxHeight: 120,
   },
-  errorContainer: {
-    flex: 1,
-    justifyContent: 'center',
-    alignItems: 'center',
-  },
-  errorText: {
-    color: 'red',
-    fontSize: 18,
-    fontWeight: 'bold'
-  },
+  errorContainer: { flex: 1, justifyContent: 'center', alignItems: 'center' },
+  errorText: { color: 'red', fontSize: 18, fontWeight: 'bold' },
 });
 
 export default TailorChatScreen;
