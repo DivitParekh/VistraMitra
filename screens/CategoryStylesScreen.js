@@ -7,14 +7,15 @@ import {
   StyleSheet,
   Dimensions,
   TouchableOpacity,
+  SafeAreaView,
 } from 'react-native';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { Ionicons } from '@expo/vector-icons';
+import { LinearGradient } from 'expo-linear-gradient';
 
 const { width } = Dimensions.get('window');
-const ITEM_WIDTH = width / 2 - 20;
+const ITEM_WIDTH = width / 2 - 22;
 
-// Image data (same as before)
 const categoryImages = {
   blouse: [
     require('../assets/catalog/blouse/1.jpg'),
@@ -48,9 +49,6 @@ const categoryImages = {
     require('../assets/catalog/coatset/7.jpg'),
     require('../assets/catalog/coatset/8.jpg'),
     require('../assets/catalog/coatset/9.jpg'),
-    require('../assets/catalog/coatset/10.jpg'),
-    require('../assets/catalog/coatset/11.jpg'),
-    require('../assets/catalog/coatset/12.jpg'),
   ],
   dress: [
     require('../assets/catalog/dress/1.jpg'),
@@ -62,9 +60,6 @@ const categoryImages = {
     require('../assets/catalog/dress/7.jpg'),
     require('../assets/catalog/dress/8.jpg'),
     require('../assets/catalog/dress/9.jpg'),
-    require('../assets/catalog/dress/10.jpg'),
-    require('../assets/catalog/dress/11.jpg'),
-    require('../assets/catalog/dress/12.jpg'),
   ],
   kurti: [
     require('../assets/catalog/kurti/1.jpg'),
@@ -76,72 +71,12 @@ const categoryImages = {
     require('../assets/catalog/kurti/7.jpg'),
     require('../assets/catalog/kurti/8.jpg'),
     require('../assets/catalog/kurti/9.jpg'),
-    require('../assets/catalog/kurti/10.jpg'),
-    require('../assets/catalog/kurti/11.jpg'),
-    require('../assets/catalog/kurti/12.jpg'),
-    require('../assets/catalog/kurti/13.jpg'),
-  ],
-  lehenga: [
-    require('../assets/catalog/lehenga/1.jpg'),
-    require('../assets/catalog/lehenga/2.jpg'),
-    require('../assets/catalog/lehenga/3.jpg'),
-    require('../assets/catalog/lehenga/4.jpg'),
-    require('../assets/catalog/lehenga/5.jpg'),
-    require('../assets/catalog/lehenga/6.jpg'),
-    require('../assets/catalog/lehenga/7.jpg'),
-    require('../assets/catalog/lehenga/8.jpg'),
-    require('../assets/catalog/lehenga/9.jpg'),
-  ],
-  palazzo: [
-    require('../assets/catalog/palazzo/1.jpg'),
-    require('../assets/catalog/palazzo/2.jpg'),
-    require('../assets/catalog/palazzo/3.jpg'),
-    require('../assets/catalog/palazzo/4.jpg'),
-    require('../assets/catalog/palazzo/5.jpg'),
-    require('../assets/catalog/palazzo/6.jpg'),
-    require('../assets/catalog/palazzo/7.jpg'),
-    require('../assets/catalog/palazzo/8.jpg'),
-    require('../assets/catalog/palazzo/9.jpg'),
-  ],
-  punjabi: [
-    require('../assets/catalog/punjabi/1.jpg'),
-    require('../assets/catalog/punjabi/2.jpg'),
-    require('../assets/catalog/punjabi/3.jpg'),
-    require('../assets/catalog/punjabi/4.jpg'),
-    require('../assets/catalog/punjabi/5.jpg'),
-    require('../assets/catalog/punjabi/6.jpg'),
-    require('../assets/catalog/punjabi/7.jpg'),
-    require('../assets/catalog/punjabi/8.jpg'),
-    require('../assets/catalog/punjabi/9.jpg'),
-  ],
-  saree: [
-    require('../assets/catalog/saree/1.jpg'),
-    require('../assets/catalog/saree/2.jpg'),
-    require('../assets/catalog/saree/3.jpg'),
-    require('../assets/catalog/saree/4.jpg'),
-    require('../assets/catalog/saree/5.jpg'),
-    require('../assets/catalog/saree/6.jpg'),
-    require('../assets/catalog/saree/7.jpg'),
-    require('../assets/catalog/saree/8.jpg'),
-    require('../assets/catalog/saree/9.jpg'),
-  ],
-  sharara: [
-    require('../assets/catalog/sharara/1.jpg'),
-    require('../assets/catalog/sharara/2.jpg'),
-    require('../assets/catalog/sharara/3.jpg'),
-    require('../assets/catalog/sharara/4.jpg'),
-    require('../assets/catalog/sharara/5.jpg'),
-    require('../assets/catalog/sharara/6.jpg'),
-    require('../assets/catalog/sharara/7.jpg'),
-    require('../assets/catalog/sharara/8.jpg'),
-    require('../assets/catalog/sharara/9.jpg'),
   ],
 };
 
 const CategoryStylesScreen = ({ route }) => {
   const { categoryId, categoryName } = route.params;
   const images = categoryImages[categoryId] || [];
-
   const [savedStyles, setSavedStyles] = useState([]);
 
   useEffect(() => {
@@ -151,107 +86,122 @@ const CategoryStylesScreen = ({ route }) => {
   const loadSavedStyles = async () => {
     try {
       const data = await AsyncStorage.getItem('savedStyles');
-      if (data) {
-        setSavedStyles(JSON.parse(data));
-      }
+      if (data) setSavedStyles(JSON.parse(data));
     } catch (error) {
       console.log('Failed to load saved styles:', error);
     }
   };
 
   const toggleSaveStyle = async (img) => {
-  const uri = Image.resolveAssetSource(img).uri;
-
-  let updated;
-  if (savedStyles.includes(uri)) {
-    // 🔴 Remove from saved styles
-    updated = savedStyles.filter(item => item !== uri);
-  } else {
-    // 🟢 Add to saved styles
-    updated = [...savedStyles, uri];
-  }
-
-  try {
-    await AsyncStorage.setItem('savedStyles', JSON.stringify(updated));
-    setSavedStyles(updated);
-  } catch (error) {
-    console.log('Failed to toggle save style:', error);
-  }
-};
-
+    const uri = Image.resolveAssetSource(img).uri;
+    let updated;
+    if (savedStyles.includes(uri)) {
+      updated = savedStyles.filter((item) => item !== uri);
+    } else {
+      updated = [...savedStyles, uri];
+    }
+    try {
+      await AsyncStorage.setItem('savedStyles', JSON.stringify(updated));
+      setSavedStyles(updated);
+    } catch (error) {
+      console.log('Failed to toggle save style:', error);
+    }
+  };
 
   const isSaved = (img) => {
     const uri = Image.resolveAssetSource(img).uri;
     return savedStyles.includes(uri);
   };
 
-  const renderItem = ({ item }) => {
-    const uri = Image.resolveAssetSource(item).uri;
-    return (
-      <View style={styles.card}>
-        <Image source={item} style={styles.image} />
-        <TouchableOpacity
-          style={styles.heartIcon}
-          onPress={() => toggleSaveStyle(item)}
-        >
-          <Ionicons
-            name={isSaved(item) ? 'heart' : 'heart-outline'}
-            size={22}
-            color={isSaved(item) ? 'red' : 'black'}
-          />
-        </TouchableOpacity>
-      </View>
-    );
-  };
+  const renderItem = ({ item }) => (
+    <View style={styles.card}>
+      <Image source={item} style={styles.image} />
+      <TouchableOpacity
+        style={styles.heartIcon}
+        onPress={() => toggleSaveStyle(item)}>
+        <Ionicons
+          name={isSaved(item) ? 'heart' : 'heart-outline'}
+          size={22}
+          color={isSaved(item) ? '#E53935' : '#555'}
+        />
+      </TouchableOpacity>
+    </View>
+  );
 
   return (
-    <View style={styles.container}>
-      <Text style={styles.title}>{categoryName} Styles</Text>
+    <SafeAreaView style={styles.container}>
+      {/* Header */}
+      <LinearGradient colors={['#3F51B5', '#03DAC6']} style={styles.header}>
+        <Text style={styles.headerTitle}>{categoryName} Styles</Text>
+        <Ionicons name="color-palette-outline" size={24} color="#fff" />
+      </LinearGradient>
+
+      {/* Image Grid */}
       <FlatList
         data={images}
         numColumns={2}
         keyExtractor={(_, index) => index.toString()}
         renderItem={renderItem}
         contentContainerStyle={styles.grid}
+        showsVerticalScrollIndicator={false}
       />
-    </View>
+    </SafeAreaView>
   );
 };
+
+export default CategoryStylesScreen;
 
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    paddingTop: 20,
-    backgroundColor: '#fff',
+    backgroundColor: '#FAFAFA',
   },
-  title: {
+  header: {
+    paddingVertical: 40,
+    paddingHorizontal: 24,
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    borderBottomLeftRadius: 24,
+    borderBottomRightRadius: 24,
+    elevation: 6,
+    shadowColor: '#3F51B5',
+  },
+  headerTitle: {
     fontSize: 22,
-    fontWeight: 'bold',
-    textAlign: 'center',
-    marginBottom: 10,
+    fontWeight: '800',
+    color: '#fff',
   },
   grid: {
     paddingHorizontal: 10,
-    paddingBottom: 20,
+    paddingTop: 20,
+    paddingBottom: 80,
   },
   card: {
-    position: 'relative',
-    margin: 5,
+    flex: 1,
+    margin: 8,
+    backgroundColor: '#FFFFFF',
+    borderRadius: 14,
+    overflow: 'hidden',
+    elevation: 4,
+    shadowColor: '#000',
+    shadowOpacity: 0.1,
+    shadowRadius: 6,
+    shadowOffset: { width: 0, height: 3 },
   },
   image: {
-    width: ITEM_WIDTH,
+    width: '100%',
     height: ITEM_WIDTH * 1.3,
-    borderRadius: 10,
+    borderRadius: 14,
   },
   heartIcon: {
     position: 'absolute',
-    top: 10,
-    right: 10,
-    backgroundColor: '#fff',
-    padding: 5,
+    top: 12,
+    right: 12,
+    backgroundColor: '#FFFFFF',
+    padding: 6,
     borderRadius: 20,
-    elevation: 4,
+    elevation: 6,
+    shadowColor: '#3F51B5',
   },
 });
-
-export default CategoryStylesScreen;

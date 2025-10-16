@@ -1,4 +1,3 @@
-// screens/PaymentTailorScreen.js
 import React, { useEffect, useState } from "react";
 import {
   View,
@@ -22,6 +21,7 @@ import {
 } from "firebase/firestore";
 import { db } from "../firebase/firebaseConfig";
 import { Ionicons } from "@expo/vector-icons";
+import { LinearGradient } from "expo-linear-gradient";
 import { sendNotification } from "../utils/notificationService";
 
 const PaymentTailorScreen = () => {
@@ -42,7 +42,6 @@ const PaymentTailorScreen = () => {
     return () => unsubscribe();
   }, []);
 
-  // ✅ Handle final payment verification by tailor
   const handleFinalPayment = async (payment) => {
     try {
       Alert.alert(
@@ -67,21 +66,18 @@ const PaymentTailorScreen = () => {
               const ap = snap.data();
               const { totalCost = 0, advancePaid = 0, fullName } = ap;
 
-              // ✅ 1) Update payment record to verified
               const paymentRef = doc(db, "payments", payment.id);
               await updateDoc(paymentRef, {
                 status: "verified",
                 verifiedAt: serverTimestamp(),
               });
 
-              // ✅ 2) Update appointment
               await updateDoc(appointmentRef, {
                 paymentStatus: "Full Paid",
                 balanceDue: 0,
                 updatedAt: serverTimestamp(),
               });
 
-              // ✅ 3) Update global order
               const orderRef = doc(db, "orders", orderId);
               await setDoc(
                 orderRef,
@@ -95,7 +91,6 @@ const PaymentTailorScreen = () => {
                 { merge: true }
               );
 
-              // ✅ 4) Update user's order
               const userOrderRef = doc(db, "users", userId, "orders", orderId);
               await setDoc(
                 userOrderRef,
@@ -109,7 +104,6 @@ const PaymentTailorScreen = () => {
                 { merge: true }
               );
 
-              // ✅ 5) Notify customer
               await sendNotification(
                 userId,
                 "Final Payment Verified ✅",
@@ -130,17 +124,41 @@ const PaymentTailorScreen = () => {
   };
 
   const renderItem = ({ item }) => (
-    <View style={styles.card}>
+    <LinearGradient colors={["#FFFFFF", "#EAF4FF"]} style={styles.card}>
       <View style={styles.row}>
-        <Ionicons name="cash-outline" size={20} color="#007bff" />
-        <Text style={styles.title}>Payment ID: {item.id}</Text>
+        <Ionicons name="cash-outline" size={22} color="#3F51B5" />
+        <Text style={styles.title}>Payment #{item.id}</Text>
       </View>
 
-      <Text style={styles.detail}>Order ID: {item.orderId}</Text>
-      <Text style={styles.detail}>Customer ID: {item.userId}</Text>
-      <Text style={styles.detail}>Amount: ₹{item.amount}</Text>
-      <Text style={styles.detail}>Type: {item.type}</Text>
-      <Text style={styles.detail}>Status: {item.status}</Text>
+      <View style={styles.detailBox}>
+        <Text style={styles.detail}>
+          <Text style={styles.bold}>Order ID:</Text> {item.orderId}
+        </Text>
+        <Text style={styles.detail}>
+          <Text style={styles.bold}>Customer:</Text> {item.userId}
+        </Text>
+        <Text style={styles.detail}>
+          <Text style={styles.bold}>Amount:</Text> ₹{item.amount}
+        </Text>
+        <Text style={styles.detail}>
+          <Text style={styles.bold}>Type:</Text> {item.type}
+        </Text>
+        <Text style={styles.detail}>
+          <Text style={styles.bold}>Status:</Text>{" "}
+          <Text
+            style={[
+              styles.status,
+              item.status === "submitted"
+                ? styles.pending
+                : item.status === "verified"
+                ? styles.verified
+                : {},
+            ]}
+          >
+            {item.status}
+          </Text>
+        </Text>
+      </View>
 
       <TouchableOpacity
         style={styles.verifyBtn}
@@ -148,59 +166,81 @@ const PaymentTailorScreen = () => {
       >
         <Text style={styles.verifyText}>✅ Mark as Verified (Full Paid)</Text>
       </TouchableOpacity>
-    </View>
+    </LinearGradient>
   );
 
   return (
     <View style={styles.container}>
-      <Text style={styles.heading}>Pending Payments</Text>
+      <LinearGradient colors={["#3F51B5", "#03DAC6"]} style={styles.header}>
+        <Text style={styles.headerTitle}>Payment Verification</Text>
+        <Ionicons name="wallet-outline" size={24} color="#fff" />
+      </LinearGradient>
 
       {loading ? (
-        <ActivityIndicator size="large" color="#007bff" style={{ marginTop: 30 }} />
+        <ActivityIndicator size="large" color="#3F51B5" style={{ marginTop: 30 }} />
       ) : payments.length === 0 ? (
-        <Text style={styles.empty}>No pending payments found.</Text>
+        <View style={styles.emptyContainer}>
+          <Ionicons name="wallet-outline" size={48} color="#ccc" />
+          <Text style={styles.empty}>No pending payments found.</Text>
+        </View>
       ) : (
         <FlatList
           data={payments}
           renderItem={renderItem}
           keyExtractor={(item) => item.id}
-          contentContainerStyle={{ paddingBottom: 80 }}
+          contentContainerStyle={{ paddingBottom: 100 }}
+          showsVerticalScrollIndicator={false}
         />
       )}
     </View>
   );
 };
 
+export default PaymentTailorScreen;
+
 const styles = StyleSheet.create({
-  container: { flex: 1, backgroundColor: "#f9f9f9", padding: 16 },
-  heading: {
-    fontSize: 22,
-    fontWeight: "700",
-    color: "#2c3e50",
-    textAlign: "center",
-    marginBottom: 20,
+  container: { flex: 1, backgroundColor: "#f9fbfd" },
+
+  header: {
+    paddingVertical: 20,
+    paddingHorizontal: 24,
+    flexDirection: "row",
+    justifyContent: "space-between",
+    alignItems: "center",
+    borderBottomLeftRadius: 20,
+    borderBottomRightRadius: 20,
+    elevation: 6,
+    shadowColor: "#3F51B5",
   },
+  headerTitle: { fontSize: 20, fontWeight: "800", color: "#fff" },
+
   card: {
-    backgroundColor: "#fff",
+    borderRadius: 14,
     padding: 16,
-    borderRadius: 12,
-    marginBottom: 14,
-    elevation: 3,
-    borderLeftWidth: 5,
-    borderLeftColor: "#007bff",
+    margin: 10,
+    elevation: 4,
+    shadowColor: "#3F51B5",
   },
-  row: { flexDirection: "row", alignItems: "center", marginBottom: 6 },
-  title: { fontSize: 16, fontWeight: "600", marginLeft: 6 },
-  detail: { fontSize: 14, color: "#555", marginTop: 2 },
+  row: { flexDirection: "row", alignItems: "center", marginBottom: 10 },
+  title: { fontSize: 16, fontWeight: "700", color: "#3F51B5", marginLeft: 8 },
+
+  detailBox: { marginBottom: 10 },
+  detail: { fontSize: 14, color: "#333", marginVertical: 2 },
+  bold: { fontWeight: "600", color: "#2c3e50" },
+
+  status: { fontWeight: "700", textTransform: "capitalize" },
+  pending: { color: "#f39c12" },
+  verified: { color: "#27ae60" },
+
   verifyBtn: {
-    marginTop: 12,
+    marginTop: 10,
     backgroundColor: "#27ae60",
-    paddingVertical: 10,
-    borderRadius: 8,
+    paddingVertical: 12,
+    borderRadius: 10,
     alignItems: "center",
   },
-  verifyText: { color: "#fff", fontWeight: "700" },
-  empty: { textAlign: "center", fontSize: 16, color: "#888", marginTop: 30 },
-});
+  verifyText: { color: "#fff", fontWeight: "700", fontSize: 15 },
 
-export default PaymentTailorScreen;
+  emptyContainer: { flex: 1, justifyContent: "center", alignItems: "center" },
+  empty: { color: "#777", fontSize: 16, marginTop: 10 },
+});

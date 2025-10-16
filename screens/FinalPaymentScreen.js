@@ -1,4 +1,3 @@
-// screens/FinalPaymentScreen.js
 import React, { useState, useEffect } from "react";
 import {
   View,
@@ -7,19 +6,16 @@ import {
   TouchableOpacity,
   Alert,
   ActivityIndicator,
+  ScrollView,
 } from "react-native";
 import { Ionicons } from "@expo/vector-icons";
 import QRCode from "react-native-qrcode-svg";
 import { db } from "../firebase/firebaseConfig";
-import {
-  doc,
-  setDoc,
-  serverTimestamp,
-  collection,
-} from "firebase/firestore";
+import { doc, setDoc, serverTimestamp, collection } from "firebase/firestore";
 import { sendNotification } from "../utils/notificationService";
 import AsyncStorage from "@react-native-async-storage/async-storage";
 import { getAuth, onAuthStateChanged } from "firebase/auth";
+import { LinearGradient } from "expo-linear-gradient";
 
 const FinalPaymentScreen = ({ route, navigation }) => {
   const { appointmentId, userId: routeUserId, totalCost, advancePaid } = route.params;
@@ -37,17 +33,13 @@ const FinalPaymentScreen = ({ route, navigation }) => {
     "Final Payment - VastraMitra"
   )}`;
 
-  // ✅ Get logged-in Firebase UID (real auth, not just AsyncStorage)
+  // ✅ Get logged-in Firebase UID
   useEffect(() => {
     const auth = getAuth();
     const unsubscribe = onAuthStateChanged(auth, async (user) => {
-      if (user) {
-        console.log("✅ Firebase Auth UID:", user.uid);
-        setAuthUid(user.uid);
-      } else {
-        // fallback to AsyncStorage UID (if app saved it)
+      if (user) setAuthUid(user.uid);
+      else {
         const storedUid = await AsyncStorage.getItem("uid");
-        console.log("⚠️ Using AsyncStorage UID:", storedUid);
         setAuthUid(storedUid || null);
       }
     });
@@ -66,18 +58,15 @@ const FinalPaymentScreen = ({ route, navigation }) => {
       const payRef = doc(collection(db, "payments"));
       await setDoc(payRef, {
         paymentId: payRef.id,
-        userId: authUid, // ✅ must match Firebase Auth UID
+        userId: authUid,
         orderId: appointmentId,
         type: "final",
         amount: Number(remainingAmount),
-        status: "submitted", // tailor will verify it
+        status: "submitted",
         txnId,
         createdAt: serverTimestamp(),
       });
 
-      console.log("✅ Payment record created:", payRef.id);
-
-      // notify tailor to verify
       await sendNotification(
         "YvjGOga1CDWJhJfoxAvL7c7Z5sG2",
         "Final Payment Submitted 💳",
@@ -90,7 +79,6 @@ const FinalPaymentScreen = ({ route, navigation }) => {
       );
       navigation.navigate("CustomerScreen");
     } catch (error) {
-      console.error("❌ Final Payment Error:", error);
       Alert.alert(
         "Final Payment Error",
         `FirebaseError: ${error.message || "Unable to create payment record"}`
@@ -101,16 +89,26 @@ const FinalPaymentScreen = ({ route, navigation }) => {
   };
 
   return (
-    <View style={styles.container}>
-      <Text style={styles.header}>Final Payment</Text>
+    <ScrollView contentContainerStyle={styles.container}>
+      {/* Header */}
+      <LinearGradient colors={["#3F51B5", "#03DAC6"]} style={styles.header}>
+        <Text style={styles.headerTitle}>Final Payment</Text>
+        <Ionicons name="cash-outline" size={26} color="#fff" />
+      </LinearGradient>
 
-      <View style={styles.summary}>
-        <Ionicons name="cash-outline" size={26} color="#007bff" />
-        <Text style={styles.text}>Total: ₹{totalCost}</Text>
-        <Text style={styles.text}>Advance Paid: ₹{advancePaid}</Text>
-        <Text style={styles.text}>Remaining: ₹{remainingAmount} (70%)</Text>
+      {/* Summary Card */}
+      <View style={styles.summaryCard}>
+        <Ionicons name="card-outline" size={30} color="#3F51B5" />
+        <Text style={styles.summaryTitle}>Payment Summary</Text>
+        <View style={styles.divider} />
+        <Text style={styles.summaryText}>Total Amount: ₹{totalCost}</Text>
+        <Text style={styles.summaryText}>Advance Paid: ₹{advancePaid}</Text>
+        <Text style={[styles.summaryText, { fontWeight: "700", color: "#3F51B5" }]}>
+          Remaining: ₹{remainingAmount}
+        </Text>
       </View>
 
+      {/* Payment Section */}
       {!showQR ? (
         <TouchableOpacity
           style={[styles.payBtn, isProcessing && { opacity: 0.7 }]}
@@ -120,13 +118,13 @@ const FinalPaymentScreen = ({ route, navigation }) => {
           {isProcessing ? (
             <ActivityIndicator color="#fff" />
           ) : (
-            <Text style={styles.payText}>Pay ₹{remainingAmount} via UPI</Text>
+            <Text style={styles.payText}>Proceed to Pay ₹{remainingAmount}</Text>
           )}
         </TouchableOpacity>
       ) : (
         <View style={styles.qrContainer}>
-          <Text style={styles.qrTitle}>Scan this QR to pay ₹{remainingAmount}</Text>
-          <View style={{ backgroundColor: "#fff", padding: 16, borderRadius: 10 }}>
+          <Text style={styles.qrTitle}>Scan & Pay</Text>
+          <View style={styles.qrBox}>
             <QRCode value={upiUrl} size={200} />
           </View>
           <Text style={styles.qrNote}>UPI ID: {UPI_ID}</Text>
@@ -136,7 +134,7 @@ const FinalPaymentScreen = ({ route, navigation }) => {
             onPress={() =>
               Alert.alert(
                 "Confirm Payment",
-                "Tap confirm only after you’ve completed the payment in your UPI app.",
+                "Tap confirm only after completing the payment.",
                 [
                   { text: "Cancel" },
                   { text: "Confirm", onPress: () => submitFinalPayment() },
@@ -144,32 +142,111 @@ const FinalPaymentScreen = ({ route, navigation }) => {
               )
             }
           >
-            <Text style={styles.confirmText}>✅ I’ve Paid — Submit for Verification</Text>
+            <LinearGradient colors={["#03DAC6", "#3F51B5"]} style={styles.confirmGradient}>
+              <Text style={styles.confirmText}>✅ I’ve Paid — Submit</Text>
+            </LinearGradient>
           </TouchableOpacity>
 
-          <TouchableOpacity style={styles.qrBackBtn} onPress={() => setShowQR(false)}>
-            <Text style={styles.qrBackText}>← Back</Text>
+          <TouchableOpacity style={styles.backBtn} onPress={() => setShowQR(false)}>
+            <Text style={styles.backText}>← Back</Text>
           </TouchableOpacity>
         </View>
       )}
-    </View>
+    </ScrollView>
   );
 };
 
-const styles = StyleSheet.create({
-  container: { flex: 1, justifyContent: "center", alignItems: "center", backgroundColor: "#f8f9fa", padding: 20 },
-  header: { fontSize: 22, fontWeight: "700", color: "#2c3e50", marginBottom: 20 },
-  summary: { backgroundColor: "#fff", padding: 20, borderRadius: 12, elevation: 2, width: "100%", alignItems: "center", marginBottom: 30 },
-  text: { fontSize: 16, fontWeight: "600", color: "#333", marginTop: 8 },
-  payBtn: { backgroundColor: "#007bff", paddingVertical: 14, borderRadius: 10, width: "100%", alignItems: "center" },
-  payText: { color: "#fff", fontWeight: "700", fontSize: 16 },
-  qrContainer: { alignItems: "center", backgroundColor: "#fff", padding: 20, borderRadius: 12, elevation: 3 },
-  qrTitle: { fontSize: 16, fontWeight: "600", marginBottom: 10, color: "#2c3e50" },
-  qrNote: { marginTop: 10, fontSize: 13, color: "#666" },
-  confirmBtn: { marginTop: 20, backgroundColor: "#27ae60", padding: 12, borderRadius: 10, width: "100%", alignItems: "center" },
-  confirmText: { color: "#fff", fontWeight: "700" },
-  qrBackBtn: { marginTop: 15 },
-  qrBackText: { color: "#007bff", fontWeight: "600" },
-});
-
 export default FinalPaymentScreen;
+
+const styles = StyleSheet.create({
+  container: {
+    flexGrow: 1,
+    backgroundColor: "#f9fbfd",
+    alignItems: "center",
+    paddingBottom: 40,
+  },
+
+  header: {
+    width: "100%",
+    flexDirection: "row",
+    justifyContent: "space-between",
+    alignItems: "center",
+    paddingVertical: 22,
+    paddingHorizontal: 26,
+    borderBottomLeftRadius: 20,
+    borderBottomRightRadius: 20,
+    elevation: 6,
+  },
+  headerTitle: {
+    fontSize: 22,
+    fontWeight: "800",
+    color: "#fff",
+  },
+
+  summaryCard: {
+    backgroundColor: "#fff",
+    borderRadius: 16,
+    elevation: 5,
+    shadowColor: "#3F51B5",
+    shadowOpacity: 0.15,
+    shadowRadius: 6,
+    padding: 20,
+    width: "90%",
+    alignItems: "center",
+    marginTop: 20,
+    marginBottom: 30,
+  },
+  summaryTitle: { fontSize: 18, fontWeight: "700", color: "#2c3e50", marginTop: 10 },
+  summaryText: { fontSize: 16, color: "#444", marginTop: 8 },
+  divider: {
+    height: 1,
+    width: "80%",
+    backgroundColor: "#E0E0E0",
+    marginVertical: 10,
+  },
+
+  payBtn: {
+    backgroundColor: "#3F51B5",
+    borderRadius: 12,
+    width: "90%",
+    alignItems: "center",
+    paddingVertical: 14,
+    elevation: 4,
+    shadowColor: "#3F51B5",
+  },
+  payText: { color: "#fff", fontWeight: "700", fontSize: 16 },
+
+  qrContainer: {
+    backgroundColor: "#fff",
+    borderRadius: 16,
+    elevation: 5,
+    padding: 20,
+    alignItems: "center",
+    width: "90%",
+  },
+  qrTitle: { fontSize: 18, fontWeight: "700", color: "#3F51B5", marginBottom: 10 },
+  qrBox: {
+    backgroundColor: "#fff",
+    padding: 16,
+    borderRadius: 14,
+    elevation: 4,
+    shadowColor: "#000",
+  },
+  qrNote: { marginTop: 10, fontSize: 13, color: "#666" },
+
+  confirmBtn: {
+    marginTop: 20,
+    width: "100%",
+    borderRadius: 10,
+    overflow: "hidden",
+  },
+  confirmGradient: {
+    paddingVertical: 14,
+    alignItems: "center",
+    borderRadius: 10,
+  },
+  confirmText: { color: "#fff", fontWeight: "700", fontSize: 15 },
+
+  backBtn: { marginTop: 15 },
+  backText: { color: "#3F51B5", fontWeight: "700", fontSize: 14 },
+});

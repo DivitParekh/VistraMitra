@@ -12,12 +12,35 @@ import { Ionicons } from '@expo/vector-icons';
 import { signOut } from 'firebase/auth';
 import { auth } from '../firebase/firebaseConfig';
 
+/**
+ * Global Firestore listener manager
+ * Helps unsubscribe from all active onSnapshot() calls on logout
+ */
+let activeListeners = [];
+
+export const addListener = (unsubscribe) => {
+  if (unsubscribe && typeof unsubscribe === 'function') {
+    activeListeners.push(unsubscribe);
+  }
+};
+
+export const removeAllListeners = () => {
+  activeListeners.forEach((unsub) => {
+    try {
+      unsub && unsub();
+    } catch (e) {
+      console.warn('⚠️ Listener cleanup failed:', e);
+    }
+  });
+  activeListeners = [];
+  console.log('🧹 All Firestore listeners unsubscribed.');
+};
 
 /**
  * ProfileScreen
  * - Reads role/name/email from AsyncStorage
  * - Shows role-specific menu options
- * - Navigates to appropriate screens on press
+ * - Logs out safely (with Firestore cleanup)
  */
 const ProfileScreen = ({ navigation }) => {
   const [role, setRole] = useState(null);
@@ -43,15 +66,19 @@ const ProfileScreen = ({ navigation }) => {
 
   const handleLogout = async () => {
     try {
+      // 🧹 Clean up Firestore listeners before signing out
+      removeAllListeners();
+
       await signOut(auth);
       await AsyncStorage.clear();
+
       navigation.replace('Login');
     } catch (err) {
+      console.error('Logout Error:', err);
       Alert.alert('Logout Error', err.message);
     }
   };
 
-  // If you later add ChangePassword screen, change this to navigation.navigate('ChangePassword')
   const handleChangePassword = () => {
     Alert.alert('Not implemented', 'Change Password feature not implemented yet.');
   };
@@ -74,7 +101,6 @@ const ProfileScreen = ({ navigation }) => {
           <TouchableOpacity
             style={styles.option}
             onPress={() => navigation.navigate('SavedStyles')}
-            accessibilityLabel="Saved Styles"
           >
             <Ionicons name="shirt-outline" size={20} color="#5DA3FA" />
             <Text style={styles.optionText}>Saved Styles</Text>
@@ -83,7 +109,6 @@ const ProfileScreen = ({ navigation }) => {
           <TouchableOpacity
             style={styles.option}
             onPress={() => navigation.navigate('AppointmentScreen')}
-            accessibilityLabel="My Appointments"
           >
             <Ionicons name="calendar-outline" size={20} color="#5DA3FA" />
             <Text style={styles.optionText}>My Appointments</Text>
@@ -92,7 +117,6 @@ const ProfileScreen = ({ navigation }) => {
           <TouchableOpacity
             style={styles.option}
             onPress={() => navigation.navigate('OrderScreen')}
-            accessibilityLabel="My Orders"
           >
             <Ionicons name="cube-outline" size={20} color="#5DA3FA" />
             <Text style={styles.optionText}>My Orders</Text>
@@ -108,7 +132,6 @@ const ProfileScreen = ({ navigation }) => {
           <TouchableOpacity
             style={styles.option}
             onPress={() => navigation.navigate('AppointmentCalendar')}
-            accessibilityLabel="Appointment Calendar"
           >
             <Ionicons name="time-outline" size={20} color="#5DA3FA" />
             <Text style={styles.optionText}>Appointment Calendar</Text>
@@ -117,7 +140,6 @@ const ProfileScreen = ({ navigation }) => {
           <TouchableOpacity
             style={styles.option}
             onPress={() => navigation.navigate('OrderManagement')}
-            accessibilityLabel="Manage Orders"
           >
             <Ionicons name="briefcase-outline" size={20} color="#5DA3FA" />
             <Text style={styles.optionText}>Order Management</Text>
@@ -126,7 +148,6 @@ const ProfileScreen = ({ navigation }) => {
           <TouchableOpacity
             style={styles.option}
             onPress={() => navigation.navigate('TailorTaskManager')}
-            accessibilityLabel="Task Manager"
           >
             <Ionicons name="bar-chart-outline" size={20} color="#5DA3FA" />
             <Text style={styles.optionText}>Task Manager</Text>

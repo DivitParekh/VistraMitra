@@ -1,4 +1,4 @@
-import React, { useEffect, useState } from 'react';
+import React, { useEffect, useState } from "react";
 import {
   View,
   Text,
@@ -7,7 +7,8 @@ import {
   ActivityIndicator,
   TouchableOpacity,
   Alert,
-} from 'react-native';
+  ScrollView,
+} from "react-native";
 import {
   collection,
   query,
@@ -15,11 +16,13 @@ import {
   where,
   getDoc,
   doc,
-} from 'firebase/firestore';
-import { db } from '../firebase/firebaseConfig';
-import AsyncStorage from '@react-native-async-storage/async-storage';
-import { useNavigation } from '@react-navigation/native';
-import { generateInvoice } from '../utils/invoiceGenerator'; // ✅ NEW IMPORT
+} from "firebase/firestore";
+import { db } from "../firebase/firebaseConfig";
+import AsyncStorage from "@react-native-async-storage/async-storage";
+import { useNavigation } from "@react-navigation/native";
+import { generateInvoice } from "../utils/invoiceGenerator";
+import { LinearGradient } from "expo-linear-gradient";
+import { Ionicons } from "@expo/vector-icons";
 
 const OrderScreen = () => {
   const [orders, setOrders] = useState([]);
@@ -33,14 +36,14 @@ const OrderScreen = () => {
 
     const fetchOrders = async () => {
       try {
-        const uid = await AsyncStorage.getItem('uid');
+        const uid = await AsyncStorage.getItem("uid");
         if (!uid) {
-          console.warn('⚠️ No user logged in, skipping order fetch');
+          console.warn("⚠️ No user logged in, skipping order fetch");
           setLoading(false);
           return;
         }
 
-        const userOrdersRef = collection(db, 'users', uid, 'orders');
+        const userOrdersRef = collection(db, "users", uid, "orders");
         unsubscribeOrders = onSnapshot(userOrdersRef, (snapshot) => {
           const orderData = snapshot.docs.map((doc) => ({
             id: doc.id,
@@ -52,7 +55,7 @@ const OrderScreen = () => {
           setupTaskListeners(orderData, uid);
         });
       } catch (err) {
-        console.error('Error fetching orders:', err);
+        console.error("Error fetching orders:", err);
         setLoading(false);
       }
     };
@@ -63,9 +66,9 @@ const OrderScreen = () => {
 
       orderData.forEach((order) => {
         const tq = query(
-          collection(db, 'taskManager'),
-          where('orderId', '==', order.id),
-          where('userId', '==', uid)
+          collection(db, "taskManager"),
+          where("orderId", "==", order.id),
+          where("userId", "==", uid)
         );
 
         const taskUnsub = onSnapshot(tq, (taskSnap) => {
@@ -87,114 +90,100 @@ const OrderScreen = () => {
     };
   }, []);
 
-  // 🔹 Task Renderer
-  const renderTask = (task) => (
-    <View key={task.id} style={styles.taskCard}>
-      <Text style={styles.taskText}>
-        {task.stage || task.title} —{' '}
-        <Text style={styles.taskStatus}>{task.status}</Text>
-      </Text>
-    </View>
-  );
-
-  // ✅ Payment Button Handler
   const handlePayRemaining = async (item) => {
     try {
-      const uid = await AsyncStorage.getItem('uid');
+      const uid = await AsyncStorage.getItem("uid");
       let totalCost = item.totalCost;
       let advancePaid = item.advancePaid;
 
-      console.log('🟡 Checking payment info for order:', item.id);
-
       if (!totalCost || !advancePaid) {
-        const userOrderRef = doc(db, 'users', uid, 'orders', item.id);
-        const userSnap = await getDoc(userOrderRef);
-        if (userSnap.exists()) {
-          const data = userSnap.data();
-          totalCost = data.totalCost || totalCost;
-          advancePaid = data.advancePaid || advancePaid;
-        }
-      }
+        const refs = [
+          doc(db, "users", uid, "orders", item.id),
+          doc(db, "orders", item.id),
+          doc(db, "tailorAppointments", item.appointmentId || item.id),
+        ];
 
-      if (!totalCost || !advancePaid) {
-        const globalOrderRef = doc(db, 'orders', item.id);
-        const globalSnap = await getDoc(globalOrderRef);
-        if (globalSnap.exists()) {
-          const data = globalSnap.data();
-          totalCost = data.totalCost || totalCost;
-          advancePaid = data.advancePaid || advancePaid;
-        }
-      }
-
-      if (!totalCost || !advancePaid) {
-        const tailorAppRef = doc(db, 'tailorAppointments', item.appointmentId || item.id);
-        const tailorSnap = await getDoc(tailorAppRef);
-        if (tailorSnap.exists()) {
-          const data = tailorSnap.data();
-          totalCost = data.totalCost || totalCost;
-          advancePaid = data.advancePaid || advancePaid;
+        for (const ref of refs) {
+          const snap = await getDoc(ref);
+          if (snap.exists()) {
+            const data = snap.data();
+            totalCost = data.totalCost || totalCost;
+            advancePaid = data.advancePaid || advancePaid;
+          }
         }
       }
 
       if (!totalCost || !advancePaid) {
         Alert.alert(
-          'Missing Payment Info',
-          'Unable to find payment details for this order. Please contact your tailor.'
+          "Missing Payment Info",
+          "Unable to find payment details for this order. Please contact your tailor."
         );
         return;
       }
 
-      navigation.navigate('FinalPaymentScreen', {
+      navigation.navigate("FinalPaymentScreen", {
         appointmentId: item.appointmentId || item.id,
         userId: item.userId || uid,
         totalCost: Number(totalCost),
         advancePaid: Number(advancePaid),
       });
     } catch (err) {
-      console.error('Error navigating to payment:', err);
-      Alert.alert('Error', 'Unable to open payment screen.');
+      console.error("Error navigating to payment:", err);
+      Alert.alert("Error", "Unable to open payment screen.");
     }
   };
 
-  // ✅ Generate & Share Invoice
   const handleDownloadInvoice = async (item) => {
     try {
       const invoiceData = {
         orderId: item.id,
-        customerName: item.customerName || 'Customer',
-        fabric: item.fabric || 'Own Fabric',
-        styleCategory: item.style || 'Custom Stitch',
+        customerName: item.customerName || "Customer",
+        fabric: item.fabric || "Own Fabric",
+        styleCategory: item.style || "Custom Stitch",
         totalCost: item.totalCost || 0,
         advancePaid: item.advancePaid || 0,
         balanceDue: 0,
         date: new Date().toISOString(),
-        address: item.address || 'N/A',
+        address: item.address || "N/A",
       };
 
       await generateInvoice(invoiceData);
-      Alert.alert('📄 Invoice Generated', 'Invoice opened for sharing.');
+      Alert.alert("📄 Invoice Generated", "Invoice opened for sharing.");
     } catch (error) {
-      console.error('❌ Error generating invoice:', error);
-      Alert.alert('Error', 'Unable to generate invoice.');
+      console.error("❌ Error generating invoice:", error);
+      Alert.alert("Error", "Unable to generate invoice.");
     }
   };
 
-  // 🔹 Render Orders
+  const renderTask = (task) => (
+    <View key={task.id} style={styles.taskCard}>
+      <Ionicons name="checkmark-circle-outline" size={18} color="#3F51B5" />
+      <Text style={styles.taskText}>
+        {task.stage || task.title} —{" "}
+        <Text style={styles.taskStatus}>{task.status}</Text>
+      </Text>
+    </View>
+  );
+
   const renderOrder = ({ item }) => (
-    <View style={styles.orderCard}>
-      <Text style={styles.title}>Order: {item.id}</Text>
-      <Text style={styles.subtext}>Style: {item.style || 'N/A'}</Text>
-      <Text style={styles.subtext}>Fabric: {item.fabric || 'Own Cloth'}</Text>
+    <LinearGradient colors={["#FFFFFF", "#EAF4FF"]} style={styles.orderCard}>
+      <View style={styles.orderHeader}>
+        <Ionicons name="receipt-outline" size={22} color="#3F51B5" />
+        <Text style={styles.title}>Order #{item.id}</Text>
+      </View>
+
+      <Text style={styles.subtext}>Style: {item.style || "N/A"}</Text>
+      <Text style={styles.subtext}>Fabric: {item.fabric || "Own Cloth"}</Text>
       <Text style={styles.subtext}>
-        Status:{' '}
+        Status:{" "}
         <Text
           style={[
             styles.statusBadge,
-            item.status === 'Confirmed'
+            item.status === "Confirmed"
               ? styles.confirmed
-              : item.status === 'In Progress'
+              : item.status === "In Progress"
               ? styles.inProgress
-              : item.status === 'Completed'
+              : item.status === "Completed"
               ? styles.completed
               : styles.pending,
           ]}
@@ -203,8 +192,8 @@ const OrderScreen = () => {
         </Text>
       </Text>
 
-      {item.status === 'Ready for Delivery' &&
-        item.paymentStatus !== 'Full Paid' && (
+      {item.status === "Ready for Delivery" &&
+        item.paymentStatus !== "Full Paid" && (
           <TouchableOpacity
             style={styles.payBtn}
             onPress={() => handlePayRemaining(item)}
@@ -213,7 +202,7 @@ const OrderScreen = () => {
           </TouchableOpacity>
         )}
 
-      {item.paymentStatus === 'Full Paid' && (
+      {item.paymentStatus === "Full Paid" && (
         <TouchableOpacity
           style={styles.invoiceBtn}
           onPress={() => handleDownloadInvoice(item)}
@@ -228,96 +217,133 @@ const OrderScreen = () => {
           {tasks[item.id].map((t) => renderTask(t))}
         </>
       ) : (
-        <Text style={{ marginTop: 8, color: '#777', fontSize: 13 }}>
-          No tasks assigned yet.
-        </Text>
+        <Text style={styles.noTask}>No tasks assigned yet.</Text>
       )}
-    </View>
+    </LinearGradient>
   );
 
   return (
     <View style={styles.container}>
-      <Text style={styles.heading}>My Orders</Text>
+      <LinearGradient colors={["#3F51B5", "#03DAC6"]} style={styles.header}>
+        <Text style={styles.headerTitle}>My Orders</Text>
+        <Ionicons name="bag-handle-outline" size={24} color="#fff" />
+      </LinearGradient>
 
       {loading ? (
-        <ActivityIndicator size="large" color="#2196F3" style={{ marginTop: 30 }} />
+        <ActivityIndicator size="large" color="#3F51B5" style={{ marginTop: 30 }} />
       ) : orders.length === 0 ? (
-        <Text style={{ textAlign: 'center', marginTop: 20, fontSize: 16 }}>
-          No orders yet.
-        </Text>
+        <View style={styles.emptyContainer}>
+          <Ionicons name="cube-outline" size={48} color="#ccc" />
+          <Text style={styles.emptyText}>No orders yet</Text>
+        </View>
       ) : (
         <FlatList
           data={orders}
           renderItem={renderOrder}
           keyExtractor={(item) => item.id}
           contentContainerStyle={{ paddingBottom: 100 }}
+          showsVerticalScrollIndicator={false}
         />
       )}
     </View>
   );
 };
 
-// 🧾 Styles
+export default OrderScreen;
+
 const styles = StyleSheet.create({
-  container: { flex: 1, backgroundColor: '#f9f9f9', padding: 16 },
-  heading: {
-    fontSize: 24,
-    fontWeight: 'bold',
-    marginBottom: 12,
-    textAlign: 'center',
-    color: '#333',
+  container: { flex: 1, backgroundColor: "#f9fbfd" },
+
+  header: {
+    paddingVertical: 22,
+    paddingHorizontal: 24,
+    flexDirection: "row",
+    justifyContent: "space-between",
+    alignItems: "center",
+    borderBottomLeftRadius: 20,
+    borderBottomRightRadius: 20,
+    elevation: 6,
+    shadowColor: "#3F51B5",
   },
+  headerTitle: { fontSize: 20, fontWeight: "800", color: "#fff" },
+
   orderCard: {
-    backgroundColor: '#fff',
-    borderRadius: 10,
-    padding: 14,
-    marginBottom: 12,
-    elevation: 3,
+    borderRadius: 14,
+    padding: 16,
+    margin: 10,
+    elevation: 4,
+    shadowColor: "#3F51B5",
   },
-  title: { fontSize: 18, fontWeight: 'bold', marginBottom: 6 },
-  subtext: { fontSize: 14, color: '#555', marginBottom: 4 },
-  sectionTitle: {
-    fontSize: 16,
-    fontWeight: '600',
-    marginTop: 10,
+  orderHeader: {
+    flexDirection: "row",
+    alignItems: "center",
     marginBottom: 6,
-    color: '#333',
   },
+  title: {
+    fontSize: 16,
+    fontWeight: "700",
+    color: "#3F51B5",
+    marginLeft: 6,
+  },
+  subtext: { fontSize: 14, color: "#333", marginVertical: 2 },
+
   statusBadge: {
-    fontWeight: '600',
+    fontWeight: "700",
     paddingHorizontal: 8,
-    paddingVertical: 2,
+    paddingVertical: 3,
     borderRadius: 6,
-    overflow: 'hidden',
+    overflow: "hidden",
   },
-  pending: { backgroundColor: '#fce4b3', color: '#e67e22' },
-  confirmed: { backgroundColor: '#d4edda', color: '#27ae60' },
-  inProgress: { backgroundColor: '#cce5ff', color: '#007bff' },
-  completed: { backgroundColor: '#d4edda', color: '#2c3e50' },
+  pending: { backgroundColor: "#fce4b3", color: "#e67e22" },
+  confirmed: { backgroundColor: "#d4edda", color: "#27ae60" },
+  inProgress: { backgroundColor: "#cce5ff", color: "#007bff" },
+  completed: { backgroundColor: "#d4edda", color: "#2c3e50" },
+
+  payBtn: {
+    backgroundColor: "#27ae60",
+    paddingVertical: 10,
+    borderRadius: 10,
+    marginTop: 10,
+    alignItems: "center",
+  },
+  payText: { color: "#fff", fontWeight: "700", fontSize: 15 },
+
+  invoiceBtn: {
+    backgroundColor: "#3F51B5",
+    paddingVertical: 10,
+    borderRadius: 10,
+    marginTop: 10,
+    alignItems: "center",
+  },
+  invoiceText: { color: "#fff", fontWeight: "700", fontSize: 15 },
+
+  sectionTitle: {
+    fontSize: 15,
+    fontWeight: "600",
+    color: "#2c3e50",
+    marginTop: 12,
+  },
   taskCard: {
-    backgroundColor: '#f8f8f8',
+    backgroundColor: "#f2f6ff",
     borderRadius: 8,
-    padding: 10,
+    padding: 8,
+    flexDirection: "row",
+    alignItems: "center",
     marginVertical: 4,
   },
-  taskText: { fontSize: 14, fontWeight: '500' },
-  taskStatus: { fontWeight: '600', color: '#007bff' },
-  payBtn: {
-    backgroundColor: '#27ae60',
-    paddingVertical: 10,
-    borderRadius: 8,
-    marginTop: 10,
-    alignItems: 'center',
+  taskText: {
+    fontSize: 14,
+    marginLeft: 6,
+    color: "#3F51B5",
+    fontWeight: "500",
   },
-  payText: { color: '#fff', fontWeight: '600', fontSize: 15 },
-  invoiceBtn: {
-    backgroundColor: '#007bff',
-    paddingVertical: 10,
-    borderRadius: 8,
-    marginTop: 10,
-    alignItems: 'center',
-  },
-  invoiceText: { color: '#fff', fontWeight: '600', fontSize: 15 },
-});
+  taskStatus: { fontWeight: "700", color: "#03A9F4" },
+  noTask: { fontSize: 13, color: "#777", marginTop: 4 },
 
-export default OrderScreen;
+  emptyContainer: {
+    flex: 1,
+    justifyContent: "center",
+    alignItems: "center",
+  },
+  emptyText: { color: "#777", fontSize: 16, marginTop: 10 },
+});

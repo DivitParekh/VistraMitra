@@ -1,4 +1,3 @@
-// screens/AppointmentCalendar.js
 import React, { useEffect, useState } from 'react';
 import {
   View,
@@ -23,6 +22,7 @@ import {
 } from 'firebase/firestore';
 import { db } from '../firebase/firebaseConfig';
 import { sendNotification } from '../utils/notificationService';
+import { LinearGradient } from 'expo-linear-gradient';
 
 const AppointmentCalendar = ({ navigation }) => {
   const [appointments, setAppointments] = useState([]);
@@ -52,128 +52,86 @@ const AppointmentCalendar = ({ navigation }) => {
           marked: true,
           dotColor:
             app.status === 'Confirmed'
-              ? '#27ae60'
+              ? '#4CAF50'
               : app.status === 'Pending'
-              ? '#f39c12'
-              : '#c0392b',
+              ? '#03DAC6'
+              : '#E53935',
         };
       }
     });
     setMarkedDates(marks);
   };
 
-  // 🔹 Confirm or Reject Appointment
   const updateStatus = async (id, newStatus, userId, appointment) => {
     try {
       if (!userId) {
-        Alert.alert("Error", "Cannot confirm — missing customer info.");
+        Alert.alert('Error', 'Cannot confirm — missing customer info.');
         return;
       }
 
-      // ✅ Confirm only: Create order + tasks
-      if (newStatus === "Confirmed") {
+      if (newStatus === 'Confirmed') {
         const orderId = id;
-
         const orderData = {
           orderId,
           appointmentId: id,
           userId,
-          customerName: appointment.fullName || "Customer",
-          styleCategory: appointment.styleCategory || "Custom Style",
+          customerName: appointment.fullName || 'Customer',
+          styleCategory: appointment.styleCategory || 'Custom Style',
           styleImage: appointment.styleImage || null,
-          fabric: appointment.fabric || "Customer Fabric",
-          address: appointment.address || "",
+          fabric: appointment.fabric || 'Customer Fabric',
+          address: appointment.address || '',
           date: appointment.date,
           time: appointment.time,
           totalCost: appointment.totalCost || 0,
           advancePaid: appointment.advancePaid || 0,
           balanceDue:
             (appointment.totalCost || 0) - (appointment.advancePaid || 0),
-          paymentStatus: appointment.paymentStatus || "Advance Paid",
-          status: "Confirmed",
+          paymentStatus: appointment.paymentStatus || 'Advance Paid',
+          status: 'Confirmed',
           createdAt: serverTimestamp(),
         };
 
-        // 🟢 Create order in Firestore
-        await setDoc(doc(db, "orders", orderId), orderData);
-        await setDoc(doc(db, "users", userId, "orders", orderId), orderData);
+        await setDoc(doc(db, 'orders', orderId), orderData);
+        await setDoc(doc(db, 'users', userId, 'orders', orderId), orderData);
 
-        // 🧵 Create default task stages
-        const stages = ["Cutting", "Stitching", "Handwork", "Packaging"];
+        const stages = ['Cutting', 'Stitching', 'Handwork', 'Packaging'];
         for (const stage of stages) {
-          await addDoc(collection(db, "taskManager"), {
+          await addDoc(collection(db, 'taskManager'), {
             orderId,
             userId,
             customerName: appointment.fullName,
             stage,
-            status: "Pending",
+            status: 'Pending',
             createdAt: serverTimestamp(),
           });
         }
-
-        // 🔔 Auto-send payment reminder if delivery within 2 days
-        const today = new Date();
-        const deliveryDate = new Date(appointment.date);
-        const diffInDays = (deliveryDate - today) / (1000 * 60 * 60 * 24);
-
-        if (diffInDays <= 2 && !appointment.reminderSent) {
-          await sendFinalPaymentReminder(appointment);
-        }
       }
 
-      // ✅ Update status globally
       await setDoc(
-        doc(db, "tailorAppointments", id),
+        doc(db, 'tailorAppointments', id),
         { ...appointment, status: newStatus },
         { merge: true }
       );
       await setDoc(
-        doc(db, "appointments", userId, "userAppointments", id),
+        doc(db, 'appointments', userId, 'userAppointments', id),
         { ...appointment, status: newStatus },
         { merge: true }
       );
 
-      // 🔔 Send appointment status notification
       await sendNotification(
         userId,
-        newStatus === "Confirmed"
-          ? "Appointment Confirmed ✅"
-          : "Appointment Rejected ❌",
-        newStatus === "Confirmed"
+        newStatus === 'Confirmed'
+          ? 'Appointment Confirmed ✅'
+          : 'Appointment Rejected ❌',
+        newStatus === 'Confirmed'
           ? `Your appointment on ${appointment.date} at ${appointment.time} has been confirmed.`
           : `Sorry, your appointment on ${appointment.date} at ${appointment.time} was rejected.`
       );
 
-      Alert.alert("Success", `Appointment marked as ${newStatus}`);
+      Alert.alert('Success', `Appointment marked as ${newStatus}`);
     } catch (err) {
-      console.error("Error updating status:", err);
-      Alert.alert("Error", "Could not update appointment status");
-    }
-  };
-
-  // 🚀 Auto Final Payment Reminder
-  const sendFinalPaymentReminder = async (appointment) => {
-    try {
-      const { userId, id, totalCost, advancePaid } = appointment;
-
-      const remaining = (Number(totalCost) || 0) - (Number(advancePaid) || 0);
-      const link = `vastramitra://finalpayment?appointmentId=${id}&userId=${userId}`;
-
-      await sendNotification(
-        userId,
-        "Your Order is Ready 🎉",
-        `Your outfit is ready! Please pay the remaining ₹${remaining} to confirm delivery.`,
-        link
-      );
-
-      await updateDoc(doc(db, "appointments", userId, "userAppointments", id), {
-        reminderSent: true,
-        deliveryStatus: "Ready for Delivery",
-      });
-
-      console.log(`✅ Auto reminder sent for ${appointment.fullName}`);
-    } catch (error) {
-      console.error("Reminder Error:", error);
+      console.error('Error updating status:', err);
+      Alert.alert('Error', 'Could not update appointment status');
     }
   };
 
@@ -184,43 +142,47 @@ const AppointmentCalendar = ({ navigation }) => {
   if (loading) {
     return (
       <View style={styles.loadingContainer}>
-        <ActivityIndicator size="large" color="#5DA3FA" />
+        <ActivityIndicator size="large" color="#3F51B5" />
       </View>
     );
   }
 
   return (
     <ScrollView style={styles.container}>
-      <View style={styles.header}>
+      {/* Header */}
+      <LinearGradient colors={['#3F51B5', '#03DAC6']} style={styles.header}>
         <Text style={styles.headerTitle}>Appointment Calendar</Text>
-        <Ionicons name="calendar-outline" size={24} color="#2c3e50" />
-      </View>
+        <Ionicons name="calendar-outline" size={24} color="#fff" />
+      </LinearGradient>
 
+      {/* Calendar */}
       <Calendar
         markedDates={{
           ...markedDates,
           ...(selectedDate && {
             [selectedDate]: {
               selected: true,
-              selectedColor: '#5DA3FA',
+              selectedColor: '#3F51B5',
               ...markedDates[selectedDate],
             },
           }),
         }}
         onDayPress={(day) => setSelectedDate(day.dateString)}
         theme={{
-          backgroundColor: '#ffffff',
-          calendarBackground: '#ffffff',
-          textSectionTitleColor: '#2c3e50',
-          selectedDayBackgroundColor: '#5DA3FA',
-          todayTextColor: '#5DA3FA',
+          backgroundColor: '#fff',
+          calendarBackground: '#fff',
+          textSectionTitleColor: '#1A237E',
+          selectedDayBackgroundColor: '#3F51B5',
+          todayTextColor: '#03DAC6',
           dayTextColor: '#2c3e50',
-          arrowColor: '#5DA3FA',
-          monthTextColor: '#2c3e50',
+          arrowColor: '#3F51B5',
+          monthTextColor: '#1A237E',
           textMonthFontWeight: 'bold',
         }}
+        style={styles.calendar}
       />
 
+      {/* Appointment Cards */}
       {selectedDate && (
         <View style={styles.appointmentsList}>
           <Text style={styles.dateHeading}>
@@ -231,15 +193,20 @@ const AppointmentCalendar = ({ navigation }) => {
 
           {filteredAppointments.map((item) => (
             <View key={item.id} style={styles.card}>
+              <View style={styles.cardHeader}>
+                <Ionicons name="person-outline" size={16} color="#3F51B5" />
+                <Text style={styles.cardTitle}>{item.fullName}</Text>
+              </View>
+
               <Text style={styles.cardText}>📅 {item.date} — 🕒 {item.time}</Text>
-              <Text style={styles.cardText}>👤 {item.fullName}</Text>
               <Text style={styles.cardText}>📞 {item.phone}</Text>
               <Text style={styles.cardText}>📌 Fabric: {item.fabric || 'N/A'}</Text>
               <Text style={styles.cardText}>🎨 Style: {item.styleCategory || 'N/A'}</Text>
+
               {item.styleImage && (
                 <Image
                   source={{ uri: item.styleImage }}
-                  style={{ width: 80, height: 80, borderRadius: 6, marginVertical: 6 }}
+                  style={styles.imagePreview}
                 />
               )}
 
@@ -251,8 +218,7 @@ const AppointmentCalendar = ({ navigation }) => {
                     : item.paymentStatus === 'Full Paid'
                     ? styles.fullPaid
                     : styles.pendingPay,
-                ]}
-              >
+                ]}>
                 <Text style={styles.paymentText}>
                   {item.paymentStatus || 'Pending Payment'}
                 </Text>
@@ -266,8 +232,7 @@ const AppointmentCalendar = ({ navigation }) => {
                     : item.status === 'Pending'
                     ? styles.pending
                     : styles.rejected,
-                ]}
-              >
+                ]}>
                 {item.status}
               </Text>
 
@@ -275,14 +240,12 @@ const AppointmentCalendar = ({ navigation }) => {
                 <View style={styles.buttonRow}>
                   <TouchableOpacity
                     style={styles.confirmBtn}
-                    onPress={() => updateStatus(item.id, 'Confirmed', item.userId, item)}
-                  >
+                    onPress={() => updateStatus(item.id, 'Confirmed', item.userId, item)}>
                     <Text style={styles.btnText}>Confirm</Text>
                   </TouchableOpacity>
                   <TouchableOpacity
                     style={styles.declineBtn}
-                    onPress={() => updateStatus(item.id, 'Rejected', item.userId, item)}
-                  >
+                    onPress={() => updateStatus(item.id, 'Rejected', item.userId, item)}>
                     <Text style={styles.btnText}>Reject</Text>
                   </TouchableOpacity>
                 </View>
@@ -291,8 +254,7 @@ const AppointmentCalendar = ({ navigation }) => {
               {item.status === 'Confirmed' && (
                 <TouchableOpacity
                   style={styles.paymentBtn}
-                  onPress={() => navigation.navigate('PaymentTailorScreen')}
-                >
+                  onPress={() => navigation.navigate('PaymentTailorScreen')}>
                   <Ionicons name="wallet-outline" size={16} color="#fff" />
                   <Text style={styles.paymentBtnText}>View Payment</Text>
                 </TouchableOpacity>
@@ -306,68 +268,88 @@ const AppointmentCalendar = ({ navigation }) => {
 };
 
 const styles = StyleSheet.create({
-  container: { flex: 1, backgroundColor: '#fafafa' },
+  container: { flex: 1, backgroundColor: '#FAFAFA' },
   header: {
     flexDirection: 'row',
     justifyContent: 'space-between',
     alignItems: 'center',
     padding: 20,
-    paddingBottom: 10,
+    borderBottomLeftRadius: 25,
+    borderBottomRightRadius: 25,
+    elevation: 6,
+    shadowColor: '#3F51B5',
   },
-  headerTitle: { fontSize: 20, fontWeight: '700', color: '#2c3e50' },
-  appointmentsList: { paddingHorizontal: 20, paddingTop: 10, paddingBottom: 80 },
-  dateHeading: { fontSize: 16, fontWeight: '600', marginBottom: 16, color: '#2c3e50' },
+  headerTitle: { fontSize: 20, fontWeight: '800', color: '#fff' },
+  calendar: {
+    borderRadius: 20,
+    marginHorizontal: 16,
+    marginTop: 16,
+    elevation: 3,
+    shadowColor: 'rgba(0,0,0,0.1)',
+    overflow: 'hidden',
+  },
+  appointmentsList: { paddingHorizontal: 20, paddingTop: 20, paddingBottom: 80 },
+  dateHeading: { fontSize: 17, fontWeight: '700', color: '#1A237E', marginBottom: 12 },
   card: {
     backgroundColor: '#fff',
     padding: 16,
-    borderRadius: 12,
+    borderRadius: 14,
     marginBottom: 16,
-    elevation: 2,
-    borderLeftWidth: 5,
-    borderLeftColor: '#5DA3FA',
+    elevation: 3,
+    shadowColor: '#90CAF9',
+    borderLeftWidth: 3,
+    borderLeftColor: '#03DAC6',
   },
-  cardText: { fontSize: 14, color: '#34495e', marginBottom: 6 },
+  cardHeader: { flexDirection: 'row', alignItems: 'center', marginBottom: 6 },
+  cardTitle: { fontSize: 16, fontWeight: '700', color: '#3F51B5', marginLeft: 6 },
+  cardText: { fontSize: 14, color: '#333', marginBottom: 4 },
+  imagePreview: {
+    width: 90,
+    height: 90,
+    borderRadius: 10,
+    marginVertical: 6,
+  },
   paymentBadge: {
     alignSelf: 'flex-start',
-    paddingHorizontal: 10,
+    paddingHorizontal: 12,
     paddingVertical: 4,
-    borderRadius: 12,
+    borderRadius: 10,
     marginTop: 4,
   },
   paymentText: { color: '#fff', fontSize: 12, fontWeight: '600' },
-  paid: { backgroundColor: '#27ae60' },
-  fullPaid: { backgroundColor: '#2ecc71' },
-  pendingPay: { backgroundColor: '#f39c12' },
+  paid: { backgroundColor: '#03DAC6' },
+  fullPaid: { backgroundColor: '#4CAF50' },
+  pendingPay: { backgroundColor: '#FFB300' },
   statusBadge: {
-    fontWeight: 'bold',
+    fontWeight: '700',
     paddingHorizontal: 8,
-    paddingVertical: 2,
-    borderRadius: 12,
+    paddingVertical: 4,
+    borderRadius: 8,
     marginTop: 6,
     fontSize: 12,
     alignSelf: 'flex-start',
   },
-  pending: { backgroundColor: '#fce4b3', color: '#e67e22' },
-  confirmed: { backgroundColor: '#d4edda', color: '#27ae60' },
-  rejected: { backgroundColor: '#f8d7da', color: '#c0392b' },
+  pending: { backgroundColor: '#fff4e0', color: '#d68910' },
+  confirmed: { backgroundColor: '#eafbea', color: '#27ae60' },
+  rejected: { backgroundColor: '#fbeaea', color: '#c0392b' },
   buttonRow: { flexDirection: 'row', justifyContent: 'space-between', marginTop: 12 },
   confirmBtn: {
-    backgroundColor: '#27ae60',
-    padding: 10,
-    borderRadius: 8,
+    backgroundColor: '#03DAC6',
+    paddingVertical: 10,
+    borderRadius: 10,
     width: '48%',
     alignItems: 'center',
   },
   declineBtn: {
-    backgroundColor: '#c0392b',
-    padding: 10,
-    borderRadius: 8,
+    backgroundColor: '#E53935',
+    paddingVertical: 10,
+    borderRadius: 10,
     width: '48%',
     alignItems: 'center',
   },
   btnText: { color: '#fff', fontWeight: '600' },
   paymentBtn: {
-    backgroundColor: '#007bff',
+    backgroundColor: '#3F51B5',
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'center',

@@ -1,35 +1,61 @@
-// utils/notificationService.js
-import { addDoc, collection, serverTimestamp } from 'firebase/firestore';
+import { addDoc, collection, serverTimestamp, doc, getDoc } from 'firebase/firestore';
 import { db } from '../firebase/firebaseConfig';
 
 /**
- * Save a notification in Firestore for a specific user.
- * @param {string} userId - The UID of the user who should receive the notification
- * @param {string} title - Short title for the notification
- * @param {string} message - Detailed message for the notification
+ * Send real-time push notification + save in Firestore + navigation deep link
+ * @param {string} userId - UID of the recipient
+ * @param {string} title - Notification title
+ * @param {string} message - Body text of notification
+ * @param {object} data - Optional data (for navigation, deep links, etc.)
  */
-export async function sendNotification(userId, title, message) {
+export async function sendNotification(userId, title, message, data = {}) {
   try {
-    if (!userId) {
-      console.error("❌ No userId provided for notification");
+    if (!userId || !title || !message) {
+      console.error('❌ Missing parameters for notification');
       return;
     }
 
-    if (!title || !message) {
-      console.error("❌ Notification must have a title and message");
-      return;
-    }
-
-    // ✅ Always create new doc with auto-generated ID
+    // ✅ Save to Firestore for in-app notifications
     await addDoc(collection(db, 'notifications', userId, 'userNotifications'), {
       title,
       message,
-      timestamp: serverTimestamp(), // 🔹 use Firestore server time
+      timestamp: serverTimestamp(),
       read: false,
+      ...data,
     });
 
-    console.log("✅ Notification created:", { userId, title, message });
+    // ✅ Fetch user’s Expo push token
+    const userDoc = await getDoc(doc(db, 'users', userId));
+    const userToken = userDoc.exists() ? userDoc.data().expoPushToken : null;
+
+    if (!userToken) {
+      console.warn(`⚠️ No Expo push token found for user: ${userId}`);
+      return;
+    }
+
+    // ✅ Create push message payload
+    const pushMessage = {
+      to: userToken,
+      sound: 'default',
+      title,
+      body: message,
+      data, // includes { screen: 'ChatScreen', params: {...} }
+    };
+
+    // ✅ Send notification via Expo Push API using fetch()
+    const response = await fetch('https://exp.host/--/api/v2/push/send', {
+      method: 'POST',
+      headers: {
+        Accept: 'application/json',
+        'Accept-encoding': 'gzip, deflate',
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify(pushMessage),
+    });
+
+    const result = await response.json();
+    console.log('📩 Notification sent successfully:', result);
   } catch (error) {
-    console.error("❌ Error sending notification:", error);
+    console.error('❌ Error sending notification:', error);
   }
 }

@@ -1,71 +1,82 @@
 import React from 'react';
-import { View, Image, StyleSheet, SafeAreaView } from 'react-native';
+import {
+  View,
+  Image,
+  StyleSheet,
+  Text,
+  TouchableOpacity,
+  SafeAreaView,
+  Dimensions,
+} from 'react-native';
 import Onboarding from 'react-native-onboarding-swiper';
+import { LinearGradient } from 'expo-linear-gradient';
+
+const { width, height } = Dimensions.get('window');
 
 const OnboardingScreen = ({ navigation }) => {
-  // ✅ Reusable render function for image
-  const renderImage = (source, small = false) => (
-    <View style={styles.imageWrapper}>
-      <Image
-        source={source}
-        style={[styles.image, small && { width: 250, height: 250 }]}
-        resizeMode="contain"
-      />
+  const GradientButton = ({ title, onPress }) => (
+    <TouchableOpacity onPress={onPress} activeOpacity={0.85}>
+      <LinearGradient
+        colors={['#3F51B5', '#03DAC6']}
+        start={{ x: 0, y: 0 }}
+        end={{ x: 1, y: 0 }}
+        style={styles.buttonContainer}>
+        <Text style={styles.buttonText}>{title}</Text>
+      </LinearGradient>
+    </TouchableOpacity>
+  );
+
+  const renderImage = (source) => (
+    <View style={styles.imageCard}>
+      <Image source={source} style={styles.image} resizeMode="contain" />
     </View>
   );
 
   return (
-    <SafeAreaView style={{ flex: 1, backgroundColor: '#fff' }}>
+    <SafeAreaView style={styles.safeArea}>
       <Onboarding
-        onSkip={() => {
-          try {
-            navigation.replace('Login');
-          } catch (e) {
-            console.log('Navigation error (Skip):', e);
-          }
-        }}
-        onDone={() => {
-          try {
-            navigation.navigate('Login');
-          } catch (e) {
-            console.log('Navigation error (Done):', e);
-          }
-        }}
+        showPagination
+        bottomBarHighlight={false}
+        onSkip={() => navigation.replace('Login')}
+        onDone={() => navigation.navigate('Login')}
+        SkipButtonComponent={(props) => <GradientButton {...props} title="Skip" />}
+        NextButtonComponent={(props) => <GradientButton {...props} title="Next" />}
+        DoneButtonComponent={(props) => <GradientButton {...props} title="Done" />}
         titleStyles={styles.title}
         subTitleStyles={styles.subtitle}
         pages={[
           {
-            backgroundColor: '#fff',
+            backgroundColor: '#FAFAFA',
             image: (
-              <View style={styles.imageWrapper}>
+              <View style={styles.logoSection}>
                 <Image
                   source={require('../assets/logo.jpg')}
                   style={styles.logo}
                   resizeMode="contain"
                 />
-                {renderImage(require('../assets/home.png'), true)}
+                {renderImage(require('../assets/home.png'))}
               </View>
             ),
             title: 'Welcome to VastraMitra',
-            subtitle: 'Your smart tailoring assistant for every need',
+            subtitle: 'Your trusted partner for smart tailoring and style.',
           },
           {
-            backgroundColor: '#f7f7f7',
+            backgroundColor: '#FFFFFF',
             image: renderImage(require('../assets/appointment.png')),
             title: 'Book Home Visit',
-            subtitle: 'Tailor comes to your doorstep for measurements',
+            subtitle: 'Let our tailor come to your home for perfect fitting.',
           },
           {
-            backgroundColor: '#fff',
+            backgroundColor: '#FAFAFA',
             image: renderImage(require('../assets/catalog.png')),
             title: 'Explore Catalog',
-            subtitle: 'Select fabrics, designs, and styles easily',
+            subtitle: 'Choose fabrics, designs, and styles with confidence.',
           },
           {
-            backgroundColor: '#f5f5f5',
+            backgroundColor: '#FFFFFF',
             image: renderImage(require('../assets/track.png')),
             title: 'Track Your Orders',
-            subtitle: 'Get real-time stitching and delivery updates',
+            subtitle: 'Stay updated on every step of your stitching journey.',
           },
         ]}
       />
@@ -74,33 +85,63 @@ const OnboardingScreen = ({ navigation }) => {
 };
 
 const styles = StyleSheet.create({
-  imageWrapper: {
+  safeArea: {
+    flex: 1,
+    backgroundColor: '#FAFAFA',
+  },
+  logoSection: {
     alignItems: 'center',
-    justifyContent: 'center',
-    marginBottom: -10,
   },
   logo: {
-    width: 100,
-    height: 100,
-    marginBottom: 20,
+    width: width * 0.4,
+    height: height * 0.12,
+    marginBottom: 12,
+    borderRadius: 20,
+  },
+  imageCard: {
+    alignItems: 'center',
+    justifyContent: 'center',
+    backgroundColor: '#FFFFFF',
+    borderRadius: 30,
+    width: width * 0.85,
+    height: height * 0.45, // ⬆ Increased image height
+    marginVertical: 15,
+    elevation: 10,
+    shadowColor: 'rgba(0,0,0,0.1)',
+    shadowOpacity: 0.25,
+    shadowRadius: 15,
+    shadowOffset: { width: 0, height: 8 },
   },
   image: {
-    width: 300,
-    height: 300,
+    width: '90%',
+    height: '90%',
   },
   title: {
-    fontSize: 24,
-    fontWeight: '700',
-    color: '#333',
+    fontSize: 28,
+    fontWeight: '800',
+    color: '#1A237E',
     textAlign: 'center',
     marginBottom: 10,
+    paddingHorizontal: 10,
   },
   subtitle: {
-    fontSize: 16,
-    color: '#666',
+    fontSize: 17,
+    color: '#424242',
     textAlign: 'center',
-    paddingHorizontal: 20,
-    lineHeight: 22,
+    paddingHorizontal: 40,
+    lineHeight: 23,
+  },
+  buttonContainer: {
+    paddingVertical: 10,
+    paddingHorizontal: 25,
+    borderRadius: 25,
+    marginHorizontal: 8,
+    elevation: 4,
+  },
+  buttonText: {
+    color: '#FFFFFF',
+    fontWeight: '700',
+    fontSize: 15,
   },
 });
 

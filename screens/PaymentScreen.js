@@ -7,12 +7,14 @@ import {
   Linking,
   Alert,
   ActivityIndicator,
+  ScrollView,
 } from "react-native";
 import { Ionicons } from "@expo/vector-icons";
 import QRCode from "react-native-qrcode-svg";
 import { db } from "../firebase/firebaseConfig";
 import { doc, setDoc, collection, serverTimestamp } from "firebase/firestore";
 import { sendNotification } from "../utils/notificationService";
+import { LinearGradient } from "expo-linear-gradient";
 
 const UPI_ID = "jethvaakshat3@oksbi";
 const NAME = "Akshat Jethva";
@@ -52,18 +54,11 @@ const PaymentScreen = ({ route, navigation }) => {
     }
   };
 
-  // ✅ Confirm Appointment after Advance Payment
   const confirmAppointment = async (txnId = "MANUAL_CONFIRM") => {
     try {
       setIsProcessing(true);
-      console.log("🟢 Booking started for user:", userId);
-
-      // ✅ Step 1: Ensure parent path exists
-      console.log("🪶 Writing parent: appointments/" + userId);
       await setDoc(doc(db, "appointments", userId), { userId }, { merge: true });
-      console.log("✅ Parent doc created/exists.");
 
-      // ✅ Step 2: Write to userAppointments subcollection
       const userAppointmentsRef = collection(
         db,
         "appointments",
@@ -86,54 +81,27 @@ const PaymentScreen = ({ route, navigation }) => {
         createdAt: serverTimestamp(),
       };
 
-      console.log(
-        "🪶 Writing to: appointments/" +
-          userId +
-          "/userAppointments/" +
-          appointmentId
-      );
       await setDoc(userAppDoc, newApp);
-      console.log("✅ Sub-appointment created successfully.");
-
-      // Small delay before next write
       await new Promise((res) => setTimeout(res, 200));
 
-      // ✅ Step 3: Write global copy for tailor
-      const tailorDocRef = doc(db, "tailorAppointments", appointmentId);
-      console.log("🪶 Writing to: tailorAppointments/" + appointmentId);
-      await setDoc(tailorDocRef, {
+      await setDoc(doc(db, "tailorAppointments", appointmentId), {
         ...newApp,
         userId,
         appointmentId,
         createdBy: userId,
         createdAt: serverTimestamp(),
       });
-      console.log("✅ Tailor appointment created successfully.");
 
-      // ✅ Step 4: Notify tailor
       await sendNotification(
         "YvjGOga1CDWJhJfoxAvL7c7Z5sG2",
         "Advance Payment Received 💰",
         `${newApp.fullName} paid ₹${advanceAmount} advance. Awaiting confirmation.`
       );
-      console.log("🔔 Notification sent.");
 
       Alert.alert("✅ Payment Successful", "Appointment booked successfully!");
       navigation.navigate("CustomerScreen");
     } catch (error) {
       console.error("❌ Booking Error:", error);
-
-      // 🔍 Extra Debug Output
-      if (
-        error.code?.includes("permission") ||
-        error.message?.includes("permission")
-      ) {
-        console.log(
-          "⚠️ Firestore permission denied during booking for UID:",
-          userId
-        );
-      }
-
       Alert.alert("Error", "Failed to save appointment. Please try again.");
     } finally {
       setIsProcessing(false);
@@ -141,121 +109,171 @@ const PaymentScreen = ({ route, navigation }) => {
   };
 
   return (
-    <View style={styles.container}>
-      <Text style={styles.header}>Advance Payment</Text>
+    <LinearGradient colors={["#3F51B5", "#03DAC6"]} style={styles.gradient}>
+      <ScrollView contentContainerStyle={styles.container}>
+        <View style={styles.card}>
+          <Ionicons name="card-outline" size={32} color="#3F51B5" />
+          <Text style={styles.header}>Advance Payment</Text>
 
-      <View style={styles.summary}>
-        <Ionicons name="pricetag-outline" size={24} color="#007bff" />
-        <Text style={styles.text}>Total Cost: ₹{totalCost}</Text>
-        <Text style={styles.text}>Advance (30%): ₹{advanceAmount}</Text>
-        <Text style={styles.note}>
-          Remaining ₹{totalCost - advanceAmount} will be paid after completion.
-        </Text>
-      </View>
-
-      {!showQR ? (
-        <>
-          <TouchableOpacity
-            style={[styles.payBtn, isProcessing && { opacity: 0.7 }]}
-            onPress={handleUPIPayment}
-            disabled={isProcessing}
-          >
-            {isProcessing ? (
-              <ActivityIndicator color="#fff" />
-            ) : (
-              <Text style={styles.payText}>Pay ₹{advanceAmount} via UPI</Text>
-            )}
-          </TouchableOpacity>
-
-          <TouchableOpacity style={styles.qrBtn} onPress={() => setShowQR(true)}>
-            <Text style={styles.qrText}>Show QR Code Instead</Text>
-          </TouchableOpacity>
-        </>
-      ) : (
-        <View style={styles.qrContainer}>
-          <Text style={styles.qrTitle}>Scan this QR to pay ₹{advanceAmount}</Text>
-          <View style={{ backgroundColor: "#fff", padding: 16, borderRadius: 10 }}>
-            <QRCode value={upiUrl} size={200} />
+          <View style={styles.summary}>
+            <Ionicons name="pricetag-outline" size={22} color="#3F51B5" />
+            <Text style={styles.text}>Total Cost: ₹{totalCost}</Text>
+            <Text style={styles.text}>Advance (30%): ₹{advanceAmount}</Text>
+            <Text style={styles.note}>
+              Remaining ₹{totalCost - advanceAmount} will be paid after completion.
+            </Text>
           </View>
-          <Text style={styles.qrNote}>UPI ID: {UPI_ID}</Text>
+
+          {!showQR ? (
+            <>
+              <TouchableOpacity
+                style={[styles.payBtn, isProcessing && { opacity: 0.6 }]}
+                onPress={handleUPIPayment}
+                disabled={isProcessing}
+              >
+                {isProcessing ? (
+                  <ActivityIndicator color="#fff" />
+                ) : (
+                  <Text style={styles.payText}>
+                    Pay ₹{advanceAmount} via UPI
+                  </Text>
+                )}
+              </TouchableOpacity>
+
+              <TouchableOpacity
+                style={styles.qrBtn}
+                onPress={() => setShowQR(true)}
+              >
+                <Text style={styles.qrText}>Show QR Code Instead</Text>
+              </TouchableOpacity>
+            </>
+          ) : (
+            <View style={styles.qrContainer}>
+              <Text style={styles.qrTitle}>
+                Scan this QR to pay ₹{advanceAmount}
+              </Text>
+              <View style={styles.qrBox}>
+                <QRCode value={upiUrl} size={200} />
+              </View>
+              <Text style={styles.qrNote}>UPI ID: {UPI_ID}</Text>
+
+              <TouchableOpacity
+                style={styles.manualBtn}
+                onPress={() =>
+                  Alert.alert(
+                    "Confirm Payment",
+                    "Tap confirm after completing payment.",
+                    [
+                      { text: "Cancel" },
+                      { text: "Confirm", onPress: () => confirmAppointment() },
+                    ]
+                  )
+                }
+              >
+                <Text style={styles.manualText}>
+                  ✅ I’ve Paid — Confirm Appointment
+                </Text>
+              </TouchableOpacity>
+
+              <TouchableOpacity
+                style={styles.qrBackBtn}
+                onPress={() => setShowQR(false)}
+              >
+                <Text style={styles.qrBackText}>← Back</Text>
+              </TouchableOpacity>
+            </View>
+          )}
 
           <TouchableOpacity
-            style={styles.manualBtn}
-            onPress={() =>
-              Alert.alert("Confirm Payment", "Tap confirm after completing payment.", [
-                { text: "Cancel" },
-                { text: "Confirm", onPress: () => confirmAppointment() },
-              ])
-            }
+            style={styles.cancelBtn}
+            onPress={() => navigation.goBack()}
           >
-            <Text style={styles.manualText}>✅ I’ve Paid — Confirm Appointment</Text>
-          </TouchableOpacity>
-
-          <TouchableOpacity style={styles.qrBackBtn} onPress={() => setShowQR(false)}>
-            <Text style={styles.qrBackText}>← Back</Text>
+            <Text style={styles.cancelText}>Cancel</Text>
           </TouchableOpacity>
         </View>
-      )}
-
-      <TouchableOpacity
-        style={styles.cancelBtn}
-        onPress={() => navigation.goBack()}
-      >
-        <Text style={styles.cancelText}>Cancel</Text>
-      </TouchableOpacity>
-    </View>
+      </ScrollView>
+    </LinearGradient>
   );
 };
 
-// 🎨 STYLES
+export default PaymentScreen;
+
 const styles = StyleSheet.create({
+  gradient: { flex: 1 },
   container: {
-    flex: 1,
+    flexGrow: 1,
     justifyContent: "center",
     alignItems: "center",
-    backgroundColor: "#f8f9fa",
     padding: 20,
   },
-  header: { fontSize: 22, fontWeight: "700", color: "#2c3e50", marginBottom: 20 },
-  summary: {
+  card: {
+    width: "100%",
     backgroundColor: "#fff",
+    borderRadius: 16,
     padding: 20,
-    borderRadius: 12,
-    elevation: 2,
+    alignItems: "center",
+    elevation: 6,
+    shadowColor: "#000",
+  },
+  header: {
+    fontSize: 22,
+    fontWeight: "700",
+    color: "#2c3e50",
+    marginTop: 10,
+    marginBottom: 15,
+  },
+  summary: {
+    backgroundColor: "#F3F8FF",
+    padding: 16,
+    borderRadius: 10,
     width: "100%",
     alignItems: "center",
-    marginBottom: 30,
+    marginBottom: 20,
   },
-  text: { fontSize: 16, fontWeight: "600", color: "#333", marginTop: 8 },
+  text: { fontSize: 16, fontWeight: "600", color: "#333", marginTop: 6 },
   note: { fontSize: 13, color: "#666", marginTop: 10, textAlign: "center" },
+
   payBtn: {
-    backgroundColor: "#007bff",
+    backgroundColor: "#3F51B5",
     paddingVertical: 14,
     borderRadius: 10,
     width: "100%",
     alignItems: "center",
+    marginTop: 10,
   },
   payText: { color: "#fff", fontWeight: "700", fontSize: 16 },
   qrBtn: {
     marginTop: 15,
-    borderWidth: 1,
-    borderColor: "#007bff",
+    borderWidth: 1.5,
+    borderColor: "#3F51B5",
     paddingVertical: 10,
     borderRadius: 10,
     width: "100%",
     alignItems: "center",
   },
-  qrText: { color: "#007bff", fontWeight: "600" },
+  qrText: { color: "#3F51B5", fontWeight: "600" },
+
   qrContainer: {
     alignItems: "center",
-    backgroundColor: "#fff",
+    backgroundColor: "#F3F8FF",
     padding: 20,
-    borderRadius: 12,
+    borderRadius: 14,
     elevation: 3,
     marginBottom: 20,
   },
-  qrTitle: { fontSize: 16, fontWeight: "600", marginBottom: 10, color: "#2c3e50" },
-  qrNote: { marginTop: 10, fontSize: 13, color: "#666" },
+  qrTitle: {
+    fontSize: 16,
+    fontWeight: "600",
+    marginBottom: 10,
+    color: "#2c3e50",
+  },
+  qrBox: {
+    backgroundColor: "#fff",
+    padding: 16,
+    borderRadius: 10,
+    elevation: 4,
+  },
+  qrNote: { marginTop: 10, fontSize: 13, color: "#555" },
   manualBtn: {
     marginTop: 20,
     backgroundColor: "#27ae60",
@@ -266,9 +284,8 @@ const styles = StyleSheet.create({
   },
   manualText: { color: "#fff", fontWeight: "700" },
   qrBackBtn: { marginTop: 15 },
-  qrBackText: { color: "#007bff", fontWeight: "600" },
-  cancelBtn: { marginTop: 20 },
-  cancelText: { color: "#555" },
-});
+  qrBackText: { color: "#3F51B5", fontWeight: "600" },
 
-export default PaymentScreen;
+  cancelBtn: { marginTop: 20 },
+  cancelText: { color: "#555", fontWeight: "600" },
+});

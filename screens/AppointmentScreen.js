@@ -5,7 +5,6 @@ import {
   StyleSheet,
   TouchableOpacity,
   ScrollView,
-  Platform,
   Alert,
   TextInput,
   Image,
@@ -15,22 +14,12 @@ import DateTimePicker from '@react-native-community/datetimepicker';
 import { Ionicons } from '@expo/vector-icons';
 import { Picker } from '@react-native-picker/picker';
 import { db } from '../firebase/firebaseConfig';
-import {
-  collection,
-  doc,
-  getDocs,
-  query,
-} from 'firebase/firestore';
+import { collection, doc, getDocs, query, setDoc } from 'firebase/firestore';
 import AsyncStorage from '@react-native-async-storage/async-storage';
-
-// 🔹 Catalog with complexity info
 import { catalog } from '../assets/catalogData';
-
-// 🔔 Notifications
 import { sendNotification } from '../utils/notificationService';
-
-// 💰 Cost Estimator
 import CostEstimator from '../screens/CostEstimator';
+import { LinearGradient } from 'expo-linear-gradient';
 
 const AppointmentScreen = ({ navigation }) => {
   const [appointments, setAppointments] = useState([]);
@@ -39,7 +28,7 @@ const AppointmentScreen = ({ navigation }) => {
   const [selectedCategory, setSelectedCategory] = useState(null);
   const [selectedStyle, setSelectedStyle] = useState(null);
   const [fabricOption, setFabricOption] = useState('Own Fabric');
-  const [complexity, setComplexity] = useState('Simple'); // auto-detected
+  const [complexity, setComplexity] = useState('Simple');
 
   const [selectedDate, setSelectedDate] = useState(new Date());
   const [selectedTime, setSelectedTime] = useState(null);
@@ -53,15 +42,12 @@ const AppointmentScreen = ({ navigation }) => {
   const [email, setEmail] = useState('');
   const [address, setAddress] = useState('');
   const [note, setNote] = useState('');
-
-  // 💰 Cost Estimate state
   const [estimatedCost, setEstimatedCost] = useState({
     totalCost: 0,
     advance: 0,
     balance: 0,
   });
 
-  // 🔹 Fetch user's existing appointments
   useEffect(() => {
     const fetchAppointments = async () => {
       const uid = await AsyncStorage.getItem('uid');
@@ -100,13 +86,14 @@ const AppointmentScreen = ({ navigation }) => {
     setEstimatedCost({ totalCost: 0, advance: 0, balance: 0 });
   };
 
+  // 🟢 Booking Function with Tailor Notification
   const handleBookAppointment = async () => {
     if (!selectedTime || !name || !phone || !email || !address || !selectedStyle) {
       return Alert.alert('Error', 'Please fill all fields and select style/fabric.');
     }
     if (!userId) return Alert.alert('User not logged in');
 
-    // 🔹 Redirect to payment first (appointment created after success)
+    const appointmentId = Date.now().toString();
     const appointmentDetails = {
       fullName: name,
       phone,
@@ -120,16 +107,42 @@ const AppointmentScreen = ({ navigation }) => {
       styleCategory: selectedCategory,
       styleImage: selectedStyle?.uri || null,
       complexity,
-      status: 'Pending Payment',
+      totalCost: estimatedCost.totalCost,
+      advancePaid: estimatedCost.advance,
+      balanceDue: estimatedCost.balance,
+      status: 'Pending',
+      userId,
+      createdAt: new Date().toISOString(),
     };
 
-    navigation.navigate('PaymentScreen', {
-      totalCost: estimatedCost.totalCost,
-      userId,
-      appointmentDetails,
-    });
+    try {
+      // ✅ Save appointment to customer's subcollection
+      await setDoc(doc(db, 'appointments', userId, 'userAppointments', appointmentId), appointmentDetails);
 
-    resetForm();
+      // ✅ Save globally for tailor view
+      await setDoc(doc(db, 'tailorAppointments', appointmentId), appointmentDetails);
+
+      // ✅ Notify tailor (real-time)
+      await sendNotification(
+        'YvjGOga1CDWJhJfoxAvL7c7Z5sG2',
+        '📅 New Appointment Booked',
+        `${appointmentDetails.fullName} booked an appointment on ${appointmentDetails.date} at ${appointmentDetails.time}.`
+      );
+
+      // ✅ Navigate to PaymentScreen
+      navigation.navigate('PaymentScreen', {
+        totalCost: estimatedCost.totalCost,
+        userId,
+        appointmentDetails,
+      });
+
+      resetForm();
+      Alert.alert('Success', 'Appointment booked successfully! The tailor has been notified.');
+
+    } catch (error) {
+      console.error('❌ Error booking appointment:', error);
+      Alert.alert('Error', 'Failed to book appointment. Please try again.');
+    }
   };
 
   const toggleExpand = (id) => {
@@ -139,11 +152,13 @@ const AppointmentScreen = ({ navigation }) => {
 
   return (
     <ScrollView style={styles.container} contentContainerStyle={{ paddingBottom: 100 }}>
-      <View style={styles.header}>
+      {/* Header */}
+      <LinearGradient colors={['#3F51B5', '#03DAC6']} style={styles.header}>
         <Text style={styles.headerTitle}>Book Appointment</Text>
-        <Ionicons name="calendar-outline" size={24} color="#2c3e50" />
-      </View>
+        <Ionicons name="calendar-outline" size={26} color="#fff" />
+      </LinearGradient>
 
+      {/* Appointments */}
       {appointments.length === 0 ? (
         <Text style={styles.noAppointment}>No appointments booked yet.</Text>
       ) : (
@@ -154,14 +169,13 @@ const AppointmentScreen = ({ navigation }) => {
               key={item.id}
               style={styles.appointmentCard}
               onPress={() => toggleExpand(item.id)}
-              activeOpacity={0.8}
-            >
-              <View style={{ flexDirection: 'row', justifyContent: 'space-between' }}>
+              activeOpacity={0.9}>
+              <View style={styles.appointmentHeader}>
                 <View>
                   <Text style={styles.appointmentText}>
                     {item.date} at {item.time} ({item.type})
                   </Text>
-                  <Text style={{ fontSize: 13, color: '#555' }}>{item.fullName}</Text>
+                  <Text style={styles.appointmentName}>{item.fullName}</Text>
                 </View>
                 <View
                   style={[
@@ -171,20 +185,19 @@ const AppointmentScreen = ({ navigation }) => {
                       : item.status === 'Rejected'
                       ? styles.statusRejected
                       : styles.statusPending,
-                  ]}
-                >
+                  ]}>
                   <Text style={styles.statusText}>{item.status}</Text>
                 </View>
               </View>
 
               {expandedId === item.id && (
-                <View style={{ marginTop: 10 }}>
-                  <Text style={{ color: '#777', fontSize: 12 }}>Fabric: {item.fabric}</Text>
-                  <Text style={{ color: '#777', fontSize: 12 }}>Style: {item.styleCategory}</Text>
-                  <Text style={{ color: '#777', fontSize: 12 }}>Complexity: {item.complexity}</Text>
-                  <Text style={{ color: '#777', fontSize: 12 }}>💰 Total: ₹{item.totalCost}</Text>
-                  <Text style={{ color: '#777', fontSize: 12 }}>Advance: ₹{item.advancePaid}</Text>
-                  <Text style={{ color: '#777', fontSize: 12 }}>Balance: ₹{item.balanceDue}</Text>
+                <View style={styles.expandedInfo}>
+                  <Text style={styles.infoText}>Fabric: {item.fabric}</Text>
+                  <Text style={styles.infoText}>Style: {item.styleCategory}</Text>
+                  <Text style={styles.infoText}>Complexity: {item.complexity}</Text>
+                  <Text style={styles.infoText}>💰 Total: ₹{item.totalCost}</Text>
+                  <Text style={styles.infoText}>Advance: ₹{item.advancePaid}</Text>
+                  <Text style={styles.infoText}>Balance: ₹{item.balanceDue}</Text>
                 </View>
               )}
             </TouchableOpacity>
@@ -194,7 +207,8 @@ const AppointmentScreen = ({ navigation }) => {
 
       {/* Booking Form */}
       <View style={styles.form}>
-        {/* Basic Info */}
+        <Text style={styles.sectionTitle}>Appointment Details</Text>
+
         <Text style={styles.label}>Your Full Name</Text>
         <TextInput style={styles.input} value={name} onChangeText={setName} placeholder="John Doe" />
 
@@ -224,16 +238,14 @@ const AppointmentScreen = ({ navigation }) => {
           placeholder="123, Street Name, City"
         />
 
-        {/* Fabric */}
         <Text style={styles.label}>Fabric Option</Text>
         <View style={styles.pickerContainer}>
-          <Picker selectedValue={fabricOption} onValueChange={(v) => setFabricOption(v)} style={styles.picker}>
+          <Picker selectedValue={fabricOption} onValueChange={setFabricOption} style={styles.picker}>
             <Picker.Item label="Own Fabric" value="Own Fabric" />
             <Picker.Item label="Tailor's Fabric" value="Tailor's Fabric" />
           </Picker>
         </View>
 
-        {/* Catalog */}
         <Text style={styles.label}>Select Category</Text>
         <View style={styles.pickerContainer}>
           <Picker
@@ -243,8 +255,7 @@ const AppointmentScreen = ({ navigation }) => {
               setSelectedStyle(null);
               setComplexity('Simple');
             }}
-            style={styles.picker}
-          >
+            style={styles.picker}>
             <Picker.Item label="-- Select Category --" value={null} />
             {Object.keys(catalog).map((cat) => (
               <Picker.Item key={cat} label={cat.charAt(0).toUpperCase() + cat.slice(1)} value={cat} />
@@ -255,7 +266,7 @@ const AppointmentScreen = ({ navigation }) => {
         {selectedCategory && (
           <>
             <Text style={styles.label}>Choose Style</Text>
-            <ScrollView horizontal showsHorizontalScrollIndicator={false} style={{ marginBottom: 16 }}>
+            <ScrollView horizontal showsHorizontalScrollIndicator={false} style={styles.styleScroll}>
               {catalog[selectedCategory].map((item, idx) => (
                 <TouchableOpacity
                   key={idx}
@@ -266,16 +277,14 @@ const AppointmentScreen = ({ navigation }) => {
                   style={[
                     styles.imageOption,
                     selectedStyle?.uri === Image.resolveAssetSource(item.image).uri && styles.imageSelected,
-                  ]}
-                >
-                  <Image source={item.image} style={{ width: 80, height: 80, borderRadius: 8 }} />
+                  ]}>
+                  <Image source={item.image} style={styles.image} />
                 </TouchableOpacity>
               ))}
             </ScrollView>
           </>
         )}
 
-        {/* Date & Time */}
         <Text style={styles.label}>Preferred Date</Text>
         <TouchableOpacity style={styles.input} onPress={() => setShowDatePicker(true)}>
           <Text>{formatDate(selectedDate)}</Text>
@@ -289,7 +298,6 @@ const AppointmentScreen = ({ navigation }) => {
               setShowDatePicker(false);
               if (d) setSelectedDate(d);
             }}
-            display={Platform.OS === 'ios' ? 'inline' : 'default'}
           />
         )}
 
@@ -305,11 +313,9 @@ const AppointmentScreen = ({ navigation }) => {
               setShowTimePicker(false);
               if (t) setSelectedTime(t);
             }}
-            display={Platform.OS === 'ios' ? 'spinner' : 'default'}
           />
         )}
 
-        {/* Note */}
         <Text style={styles.label}>Special Note</Text>
         <TextInput
           style={[styles.input, { height: 80 }]}
@@ -319,7 +325,6 @@ const AppointmentScreen = ({ navigation }) => {
           placeholder="e.g. Looking for a slim-fit navy suit..."
         />
 
-        {/* 💰 Cost Estimator */}
         <CostEstimator
           fabricOption={fabricOption}
           styleCategory={selectedCategory}
@@ -327,77 +332,82 @@ const AppointmentScreen = ({ navigation }) => {
           onEstimate={setEstimatedCost}
         />
 
-        <TouchableOpacity style={styles.bookBtn} onPress={handleBookAppointment}>
-          <Text style={styles.bookBtnText}>Submit Appointment Request</Text>
-        </TouchableOpacity>
+        <LinearGradient colors={['#3F51B5', '#03DAC6']} style={styles.bookBtn}>
+          <TouchableOpacity onPress={handleBookAppointment}>
+            <Text style={styles.bookBtnText}>Submit Appointment Request</Text>
+          </TouchableOpacity>
+        </LinearGradient>
       </View>
     </ScrollView>
   );
 };
 
 const styles = StyleSheet.create({
-  container: { flex: 1, backgroundColor: '#fafafa' },
+  container: { flex: 1, backgroundColor: '#FAFAFA' },
   header: {
-    padding: 24,
+    padding: 26,
     paddingTop: 50,
     flexDirection: 'row',
     alignItems: 'center',
-    backgroundColor: '#c1e1ec',
-    borderBottomLeftRadius: 20,
-    borderBottomRightRadius: 20,
     justifyContent: 'space-between',
+    borderBottomLeftRadius: 24,
+    borderBottomRightRadius: 24,
+    elevation: 6,
+    backgroundColor: '#3F51B5',
   },
-  headerTitle: { fontSize: 20, fontWeight: '700', color: '#2c3e50' },
-  noAppointment: { textAlign: 'center', color: '#999', marginTop: 40, fontSize: 16 },
+  headerTitle: { fontSize: 22, fontWeight: '800', color: '#fff' },
+  noAppointment: { textAlign: 'center', color: '#757575', marginTop: 40, fontSize: 16 },
   appointmentsList: { paddingHorizontal: 20, marginTop: 24 },
-  subheading: { fontSize: 16, fontWeight: '600', color: '#2c3e50', marginBottom: 12 },
+  subheading: { fontSize: 16, fontWeight: '700', color: '#1A237E', marginBottom: 12 },
   appointmentCard: {
     backgroundColor: '#fff',
     padding: 14,
-    borderRadius: 10,
+    borderRadius: 12,
     marginBottom: 12,
-    elevation: 2,
+    elevation: 3,
   },
-  appointmentText: { fontSize: 14, color: '#333' },
-  form: { marginTop: 30, paddingHorizontal: 20 },
-  label: { fontSize: 14, fontWeight: '600', color: '#333', marginBottom: 6 },
+  appointmentHeader: { flexDirection: 'row', justifyContent: 'space-between' },
+  appointmentText: { fontSize: 14, fontWeight: '600', color: '#212121' },
+  appointmentName: { fontSize: 13, color: '#666' },
+  expandedInfo: { marginTop: 10 },
+  infoText: { color: '#555', fontSize: 13 },
+  form: { marginTop: 30, paddingHorizontal: 20, paddingBottom: 100 },
+  sectionTitle: { fontSize: 18, fontWeight: '700', color: '#1A237E', marginBottom: 14 },
+  label: { fontSize: 14, fontWeight: '600', color: '#333', marginBottom: 5 },
   input: {
-    backgroundColor: '#fff',
+    backgroundColor: '#FFFFFF',
     padding: 14,
     borderRadius: 10,
     marginBottom: 16,
     borderWidth: 1,
-    borderColor: '#ddd',
+    borderColor: '#E0E0E0',
   },
   pickerContainer: {
-    backgroundColor: '#fff',
+    backgroundColor: '#FFFFFF',
     borderRadius: 10,
     borderWidth: 1,
-    borderColor: '#ddd',
+    borderColor: '#E0E0E0',
     marginBottom: 16,
-    overflow: 'hidden',
   },
   picker: { height: 50, width: '100%' },
-  bookBtn: {
-    backgroundColor: '#007bff',
-    paddingVertical: 14,
-    borderRadius: 10,
-    alignItems: 'center',
-    marginTop: 10,
+  styleScroll: { marginBottom: 16 },
+  imageOption: {
+    marginRight: 10,
+    borderWidth: 2,
+    borderColor: 'transparent',
+    borderRadius: 8,
+    backgroundColor: '#fff',
+    elevation: 2,
   },
-  bookBtnText: { color: '#fff', fontWeight: '600', fontSize: 16 },
-  statusBadge: {
-    paddingHorizontal: 10,
-    paddingVertical: 4,
-    borderRadius: 12,
-    alignSelf: 'flex-start',
-  },
+  imageSelected: { borderColor: '#03DAC6' },
+  image: { width: 80, height: 80, borderRadius: 8 },
+  bookBtn: { borderRadius: 12, marginTop: 20, elevation: 6 },
+  bookBtnText: { textAlign: 'center', color: '#fff', fontWeight: '700', fontSize: 16, paddingVertical: 14 },
+  statusBadge: { paddingHorizontal: 10, paddingVertical: 4, borderRadius: 12, alignSelf: 'flex-start' },
   statusText: { fontSize: 12, fontWeight: '600', color: '#fff' },
-  statusPending: { backgroundColor: '#f39c12' },
-  statusConfirmed: { backgroundColor: '#27ae60' },
-  statusRejected: { backgroundColor: '#e74c3c' },
-  imageOption: { marginRight: 10, borderWidth: 2, borderColor: 'transparent', borderRadius: 8 },
-  imageSelected: { borderColor: '#007bff' },
+  statusPending: { backgroundColor: '#03DAC6' },
+  statusConfirmed: { backgroundColor: '#4CAF50' },
+  statusRejected: { backgroundColor: '#E53935' },
 });
 
 export default AppointmentScreen;

@@ -1,9 +1,7 @@
 import * as Print from 'expo-print';
 import * as Sharing from 'expo-sharing';
-import * as FileSystem from 'expo-file-system';
-import { Asset } from 'expo-asset';
 
-// ✅ Enhanced VastraMitra Invoice Generator with Working Local Logo
+// ✅ VastraMitra Invoice Generator — Final Professional Version (Full Paid)
 export const generateInvoice = async (orderData) => {
   try {
     const {
@@ -11,190 +9,176 @@ export const generateInvoice = async (orderData) => {
       customerName,
       fabric,
       styleCategory,
-      totalCost,
-      advancePaid,
-      balanceDue,
+      totalCost = 0,
       date,
       address,
-      paymentStatus = 'Advance Paid',
     } = orderData;
 
-    // 🖼️ Load local logo asset & convert to base64
-    const logoAsset = Asset.fromModule(require('../assets/logo.jpg'));
-    await logoAsset.downloadAsync(); // ensure the image is available
-    const logoBase64 = await FileSystem.readAsStringAsync(logoAsset.localUri, {
-      encoding: FileSystem.EncodingType.Base64,
-    });
-    const logoUrl = `data:image/jpeg;base64,${logoBase64}`;
-
-    // 🎨 Payment color
-    const statusColor =
-      paymentStatus === 'Full Paid'
-        ? '#2ecc71'
-        : paymentStatus === 'Advance Paid'
-        ? '#f1c40f'
-        : '#e74c3c';
-
-    // 🧾 HTML template
     const html = `
       <html>
         <head>
           <meta name="viewport" content="width=device-width, initial-scale=1.0">
           <style>
             @import url('https://fonts.googleapis.com/css2?family=Poppins:wght@400;600&display=swap');
+
             body {
               font-family: 'Poppins', Arial, sans-serif;
-              background-color: #f7f9fc;
+              background-color: #f9fafc;
+              color: #2c3e50;
               margin: 0;
               padding: 0;
-              color: #2c3e50;
             }
+
             .invoice-container {
               max-width: 750px;
               background: #fff;
               margin: 40px auto;
               border-radius: 12px;
-              padding: 30px 40px;
-              box-shadow: 0 4px 10px rgba(0,0,0,0.08);
+              padding: 40px;
+              box-shadow: 0 5px 20px rgba(0,0,0,0.1);
             }
+
             .header {
               text-align: center;
               border-bottom: 3px solid #007bff;
-              padding-bottom: 15px;
-              margin-bottom: 25px;
+              padding-bottom: 12px;
+              margin-bottom: 30px;
             }
-            .header img {
-              width: 110px;
-              height: auto;
-              margin-bottom: 10px;
-            }
+
             .header h1 {
+              font-size: 30px;
               color: #007bff;
-              font-size: 26px;
-              margin: 0;
-              font-weight: 700;
+              margin-bottom: 4px;
             }
-            .sub-info {
-              text-align: center;
+
+            .header p {
               font-size: 14px;
               color: #555;
-              margin-top: 6px;
+              margin: 0;
             }
-            hr {
-              border: none;
-              border-top: 1px solid #eee;
-              margin: 25px 0;
+
+            .invoice-info {
+              display: flex;
+              justify-content: space-between;
+              font-size: 14px;
+              color: #555;
+              margin-bottom: 25px;
             }
-            .section-title {
+
+            .section {
+              margin-top: 24px;
+            }
+
+            .section h2 {
+              font-size: 18px;
               color: #007bff;
-              font-weight: 600;
-              margin-bottom: 8px;
-              font-size: 17px;
+              border-left: 4px solid #007bff;
+              padding-left: 8px;
+              margin-bottom: 10px;
             }
-            p {
+
+            .details p {
               margin: 5px 0;
               font-size: 14px;
-              line-height: 1.4;
+              color: #333;
             }
-            .details {
-              display: flex;
-              justify-content: space-between;
-              font-size: 14px;
-              color: #444;
+
+            .amount-box {
+              border: 1px solid #e0e0e0;
+              border-radius: 10px;
+              padding: 20px;
+              margin-top: 25px;
+              background-color: #f6f9ff;
             }
-            .details div {
-              width: 48%;
-            }
-            .amount-section {
-              background-color: #f9fbff;
-              border: 1px solid #e5e9f2;
-              border-radius: 8px;
-              padding: 16px;
-              margin-top: 10px;
-            }
-            .amount-row {
-              display: flex;
-              justify-content: space-between;
-              margin: 6px 0;
-              font-size: 15px;
-            }
+
             .amount-total {
-              border-top: 1px solid #ccc;
-              padding-top: 6px;
+              display: flex;
+              justify-content: space-between;
+              font-size: 16px;
+              font-weight: 700;
               color: #007bff;
-              font-weight: 600;
+              border-top: 1px solid #ccc;
+              margin-top: 10px;
+              padding-top: 8px;
             }
-            .payment-status {
-              text-align: center;
-              margin-top: 20px;
-              padding: 10px;
-              border-radius: 8px;
+
+            .status {
+              background-color: #27ae60;
               color: #fff;
-              background-color: ${statusColor};
-              font-weight: 600;
-              font-size: 15px;
-            }
-            .footer {
+              padding: 12px;
+              border-radius: 8px;
               text-align: center;
               margin-top: 30px;
+              font-weight: 600;
+              font-size: 15px;
+              letter-spacing: 0.4px;
+            }
+
+            .footer {
+              text-align: center;
+              color: #888;
               font-size: 13px;
-              color: #777;
-              border-top: 1px solid #eee;
+              border-top: 1px solid #ddd;
+              margin-top: 40px;
               padding-top: 15px;
             }
+
             .footer strong {
               color: #007bff;
+            }
+
+            .footer p {
+              margin: 4px 0;
             }
           </style>
         </head>
 
         <body>
           <div class="invoice-container">
+            <!-- HEADER -->
             <div class="header">
-              <img src="${logoUrl}" alt="VastraMitra Logo" />
               <h1>VastraMitra Invoice</h1>
-              <div class="sub-info">Crafting Elegance with Precision</div>
+              <p>Smart Tailoring Assistant Platform</p>
             </div>
 
-            <div class="details">
-              <div>
-                <p><strong>Invoice ID:</strong> ${orderId}</p>
-                <p><strong>Date:</strong> ${new Date(date).toLocaleDateString()}</p>
+            <!-- INFO -->
+            <div class="invoice-info">
+              <p><strong>Invoice ID:</strong> ${orderId}</p>
+              <p><strong>Date:</strong> ${new Date(date).toLocaleDateString()}</p>
+            </div>
+
+            <!-- CUSTOMER DETAILS -->
+            <div class="section">
+              <h2>Customer Details</h2>
+              <div class="details">
+                <p><strong>Name:</strong> ${customerName}</p>
+                <p><strong>Address:</strong> ${address || 'N/A'}</p>
               </div>
-              <div style="text-align:right">
-                <p><strong>Contact:</strong> +91 98765 43210</p>
-                <p><strong>Email:</strong> support@vastramitra.com</p>
+            </div>
+
+            <!-- ORDER DETAILS -->
+            <div class="section">
+              <h2>Order Details</h2>
+              <div class="details">
+                <p><strong>Style:</strong> ${styleCategory || 'Custom Design'}</p>
+                <p><strong>Fabric:</strong> ${fabric || 'Own Fabric'}</p>
               </div>
             </div>
 
-            <hr/>
-
-            <div>
-              <h3 class="section-title">Customer Details</h3>
-              <p><strong>Name:</strong> ${customerName}</p>
-              <p><strong>Address:</strong> ${address || 'N/A'}</p>
+            <!-- PAYMENT -->
+            <div class="amount-box">
+              <div class="amount-total">
+                <span>Total Amount</span><span>₹${totalCost}</span>
+              </div>
             </div>
 
-            <hr/>
+            <!-- STATUS -->
+            <div class="status">Payment Status: Paid in Full ✅</div>
 
-            <div>
-              <h3 class="section-title">Order Details</h3>
-              <p><strong>Style:</strong> ${styleCategory || 'Custom Design'}</p>
-              <p><strong>Fabric:</strong> ${fabric || 'Own Fabric'}</p>
-            </div>
-
-            <div class="amount-section">
-              <div class="amount-row"><span>Total Cost</span><span>₹${totalCost}</span></div>
-              <div class="amount-row"><span>Advance Paid</span><span>₹${advancePaid}</span></div>
-              <div class="amount-row amount-total"><span>Remaining Balance</span><span>₹${balanceDue}</span></div>
-            </div>
-
-            <div class="payment-status">
-              Payment Status: ${paymentStatus}
-            </div>
-
+            <!-- FOOTER -->
             <div class="footer">
-              <p>Thank you for trusting <strong>VastraMitra</strong>! We’re proud to craft your style with care 👗</p>
+              <p>Thank you for trusting <strong>VastraMitra</strong>! 👗</p>
+              <p>Your satisfaction is our priority.</p>
               <p>© ${new Date().getFullYear()} VastraMitra. All Rights Reserved.</p>
             </div>
           </div>
@@ -202,18 +186,16 @@ export const generateInvoice = async (orderData) => {
       </html>
     `;
 
-    // 🖨️ Generate invoice PDF
+    // 🖨 Generate PDF
     const { uri } = await Print.printToFileAsync({ html });
-    console.log('📄 Invoice generated at:', uri);
+    console.log('📄 Invoice generated:', uri);
 
-    // 📤 Share automatically
+    // 📤 Share or Save Invoice
     if (await Sharing.isAvailableAsync()) {
       await Sharing.shareAsync(uri);
     }
 
-    return uri;
   } catch (error) {
     console.error('❌ Invoice Generation Error:', error);
-    throw error;
   }
 };
