@@ -14,10 +14,9 @@ import DateTimePicker from '@react-native-community/datetimepicker';
 import { Ionicons } from '@expo/vector-icons';
 import { Picker } from '@react-native-picker/picker';
 import { db } from '../firebase/firebaseConfig';
-import { collection, doc, getDocs, query, setDoc } from 'firebase/firestore';
+import { collection, getDocs, query } from 'firebase/firestore';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { catalog } from '../assets/catalogData';
-import { sendNotification } from '../utils/notificationService';
 import CostEstimator from '../screens/CostEstimator';
 import { LinearGradient } from 'expo-linear-gradient';
 
@@ -86,14 +85,13 @@ const AppointmentScreen = ({ navigation }) => {
     setEstimatedCost({ totalCost: 0, advance: 0, balance: 0 });
   };
 
-  // 🟢 Booking Function with Tailor Notification
+  // 🟢 Submit Function (Navigate to PaymentScreen only)
   const handleBookAppointment = async () => {
     if (!selectedTime || !name || !phone || !email || !address || !selectedStyle) {
       return Alert.alert('Error', 'Please fill all fields and select style/fabric.');
     }
     if (!userId) return Alert.alert('User not logged in');
 
-    const appointmentId = Date.now().toString();
     const appointmentDetails = {
       fullName: name,
       phone,
@@ -115,34 +113,14 @@ const AppointmentScreen = ({ navigation }) => {
       createdAt: new Date().toISOString(),
     };
 
-    try {
-      // ✅ Save appointment to customer's subcollection
-      await setDoc(doc(db, 'appointments', userId, 'userAppointments', appointmentId), appointmentDetails);
+    // ✅ Do not book appointment yet — only navigate to PaymentScreen
+    navigation.navigate('PaymentScreen', {
+      totalCost: estimatedCost.totalCost,
+      userId,
+      appointmentDetails,
+    });
 
-      // ✅ Save globally for tailor view
-      await setDoc(doc(db, 'tailorAppointments', appointmentId), appointmentDetails);
-
-      // ✅ Notify tailor (real-time)
-      await sendNotification(
-        'YvjGOga1CDWJhJfoxAvL7c7Z5sG2',
-        '📅 New Appointment Booked',
-        `${appointmentDetails.fullName} booked an appointment on ${appointmentDetails.date} at ${appointmentDetails.time}.`
-      );
-
-      // ✅ Navigate to PaymentScreen
-      navigation.navigate('PaymentScreen', {
-        totalCost: estimatedCost.totalCost,
-        userId,
-        appointmentDetails,
-      });
-
-      resetForm();
-      Alert.alert('Success', 'Appointment booked successfully! The tailor has been notified.');
-
-    } catch (error) {
-      console.error('❌ Error booking appointment:', error);
-      Alert.alert('Error', 'Failed to book appointment. Please try again.');
-    }
+    resetForm();
   };
 
   const toggleExpand = (id) => {
