@@ -30,7 +30,8 @@ ios/DerivedData/
 *.mobileprovision
 
 # 🔥 Local assets (large or dynamic files)
-assets/catalog/*
+assets/catalog/*            # Ignore extracted catalog folder
+!assets/catalog.zip          # ✅ KEEP catalog.zip in repo
 assets/uploads/*
 assets/temp/*
 assets/.DS_Store
