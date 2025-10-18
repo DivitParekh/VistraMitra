@@ -89,7 +89,6 @@ android {
 
     namespace 'com.vastramitra.app'
     defaultConfig {
-        manifestPlaceholders = [appAuthRedirectScheme: 'vastramitra']
         applicationId 'com.vastramitra.app'
         minSdkVersion rootProject.ext.minSdkVersion
         targetSdkVersion rootProject.ext.targetSdkVersion
