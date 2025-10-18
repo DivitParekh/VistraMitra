@@ -16,6 +16,23 @@ import { LinearGradient } from 'expo-linear-gradient';
 const { width } = Dimensions.get('window');
 const ITEM_WIDTH = width / 2 - 22;
 
+/**
+ * ✅ NOTE:
+ * Folder structure must be:
+ * VastraMitra/
+ * ├── assets/
+ * │    └── catalog/
+ * │         ├── blouse/
+ * │         ├── churidar/
+ * │         ├── coatset/
+ * │         ├── dress/
+ * │         └── kurti/
+ * └── screens/
+ *      └── CategoryStylesScreen.js
+ *
+ * And all file names must be lowercase: 1.jpg, 2.jpg, etc.
+ */
+
 const categoryImages = {
   blouse: [
     require('../assets/catalog/blouse/1.jpg'),
@@ -79,27 +96,24 @@ const CategoryStylesScreen = ({ route }) => {
   const images = categoryImages[categoryId] || [];
   const [savedStyles, setSavedStyles] = useState([]);
 
+  // 🔹 Load saved styles from local storage
   useEffect(() => {
-    loadSavedStyles();
+    (async () => {
+      try {
+        const data = await AsyncStorage.getItem('savedStyles');
+        if (data) setSavedStyles(JSON.parse(data));
+      } catch (error) {
+        console.log('Failed to load saved styles:', error);
+      }
+    })();
   }, []);
 
-  const loadSavedStyles = async () => {
-    try {
-      const data = await AsyncStorage.getItem('savedStyles');
-      if (data) setSavedStyles(JSON.parse(data));
-    } catch (error) {
-      console.log('Failed to load saved styles:', error);
-    }
-  };
-
+  // 🔹 Save / Unsave an image style
   const toggleSaveStyle = async (img) => {
     const uri = Image.resolveAssetSource(img).uri;
-    let updated;
-    if (savedStyles.includes(uri)) {
-      updated = savedStyles.filter((item) => item !== uri);
-    } else {
-      updated = [...savedStyles, uri];
-    }
+    const updated = savedStyles.includes(uri)
+      ? savedStyles.filter((item) => item !== uri)
+      : [...savedStyles, uri];
     try {
       await AsyncStorage.setItem('savedStyles', JSON.stringify(updated));
       setSavedStyles(updated);
@@ -118,7 +132,8 @@ const CategoryStylesScreen = ({ route }) => {
       <Image source={item} style={styles.image} />
       <TouchableOpacity
         style={styles.heartIcon}
-        onPress={() => toggleSaveStyle(item)}>
+        onPress={() => toggleSaveStyle(item)}
+      >
         <Ionicons
           name={isSaved(item) ? 'heart' : 'heart-outline'}
           size={22}
